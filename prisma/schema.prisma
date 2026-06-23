@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("member")
+  initials      String
+  color         String
+  bio           String    @default("")
+  notifSettings    Json?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime  @default(now())
+  deletedAt        DateTime?
+  tasks         Task[]    @relation("TaskAssignee")
+  projects      ProjectMember[]
+  sessions      Session[]
+  notifications Notification[]
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  jti         String    @unique
+  userId      String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Workspace {
+  id          String   @id @default(uuid())
+  name        String   @default("Ascurra Soluciones")
+  timezone    String   @default("America/Argentina/Buenos_Aires")
+  language    String   @default("es")
+  inviteToken String   @unique @default(cuid())
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+model Project {
+  id           String        @id @default(uuid())
+  name         String
+  stack        String
+  status       ProjectStatus @default(active)
+  progress     Int           @default(0)
+  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime      @default(now())
+  deletedAt    DateTime?
+  tasks        Task[]
+  members      ProjectMember[]
+  clients      ClientProject[]
+  errors       AppError[]
+  errorConfigs ErrorConfig[]
+}
+
+enum ProjectStatus {
+  active
+  completed
+  paused
+}
+
+model ProjectMember {
+  projectId String
+  userId    String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+}
+
+model Task {
+  id            String    @id @default(uuid())
+  projectId     String
+  title         String
+  description   String    @default("")
+  priority      Priority  @default(medium)
+  column        Column    @default(backlog)
+  labels        String[]
+  dueDate       String?
+  subtasksDone  Int       @default(0)
+  subtasksTotal Int       @default(0)
+  assigneeId    String?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee      User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+}
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+enum Column {
+  backlog
+  progress
+  review
+  done
+}
+
+model Client {
+  id            String        @id @default(uuid())
+  company       String
+  industry      String
+  contactName   String
+  contactEmail  String
+  status        ClientStatus  @default(prospect)
+  contractSince String?
+  lastActivity  DateTime      @default(now())
+  initials      String
+  color         String
+  createdAt     DateTime      @default(now())
+  deletedAt     DateTime?
+  projects      ClientProject[]
+}
+
+enum ClientStatus {
+  active
+  prospect
+  inactive
+}
+
+model ClientProject {
+  clientId  String
+  projectId String
+  client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([clientId, projectId])
+}
+
+model AppError {
+  id            String        @id @default(uuid())
+  projectId     String?
+  type          String
+  message       String
+  severity      ErrorSeverity @default(error)
+  status        ErrorStatus   @default(unresolved)
+  count         Int           @default(1)
+  usersAffected Int           @default(0)
+  stackTrace    String        @default("")
+  firstSeen     DateTime      @default(now())
+  lastSeen      DateTime      @default(now())
+  metaUrl       String        @default("")
+  metaBrowser   String        @default("")
+  metaOs        String        @default("")
+  metaUser      String        @default("")
+  createdAt     DateTime      @default(now())
+  deletedAt     DateTime?
+  project       Project?      @relation(fields: [projectId], references: [id])
+  occurrences   ErrorOccurrence[]
+}
+
+enum ErrorSeverity {
+  critical
+  error
+  warning
+}
+
+enum ErrorStatus {
+  unresolved
+  resolved
+  ignored
+}
+
+model ErrorOccurrence {
+  id        String   @id @default(uuid())
+  errorId   String
+  userId    String?
+  url       String?
+  browser   String?
+  os        String?
+  createdAt DateTime @default(now())
+  error     AppError @relation(fields: [errorId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String   @default("")
+  entityId  String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id           String        @id @default(uuid())
+  name         String
+  keyHash      String        @unique
+  prefix       String
+  createdAt    DateTime      @default(now())
+  revokedAt    DateTime?
+  errorConfigs ErrorConfig[]
+}
+
+model ErrorConfig {
+  id        String    @id @default(uuid())
+  name      String
+  projectId String?
+  apiKeyId  String?
+  createdAt DateTime  @default(now())
+  project   Project?  @relation(fields: [projectId], references: [id])
+  apiKey    ApiKey?   @relation(fields: [apiKeyId], references: [id])
+}
+
+model Prospect {
+  id             String         @id @default(uuid())
+  name           String
+  industry       String         @default("")
+  city           String
+  address        String         @default("")
+  phone          String         @default("")
+  website        String         @default("")
+  hours          String         @default("")
+  socialMedia    String         @default("")
+  hasWebsite     Boolean        @default(false)
+  hasSocialMedia Boolean        @default(false)
+  rating         Float          @default(0)
+  reviewCount    Int            @default(0)
+  score          Int            @default(0)
+  scoreLabel     String         @default("baja")
+  stage          ProspectStage  @default(new)
+  notes          String         @default("")
+  googleId       String?        @unique
+  createdAt      DateTime       @default(now())
+}
+
+enum ProspectStage {
+  new
+  contacted
+  interested
+  discarded
+}
