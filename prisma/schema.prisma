@@ -249,3 +249,73 @@ enum ProspectStage {
   interested
   discarded
 }
+
+model MailConfig {
+  id        String         @id @default(uuid())
+  name      String         @unique
+  host      String
+  port      Int
+  user      String
+  pass      String
+  from      String
+  templates MailTemplate[]
+  logs      MailLog[]
+  updatedAt DateTime       @updatedAt
+  createdAt DateTime       @default(now())
+}
+
+model MailTemplate {
+  id        String     @id @default(uuid())
+  configId  String
+  config    MailConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  name      String
+  subject   String
+  html      String
+  params    String[]
+  updatedAt DateTime   @updatedAt
+  createdAt DateTime   @default(now())
+
+  @@unique([configId, name])
+}
+
+model MailLog {
+  id           String     @id @default(uuid())
+  apiKeyId     String
+  configId     String
+  config       MailConfig @relation(fields: [configId], references: [id])
+  to           String
+  subject      String
+  templateName String     @default("")
+  status       String     @default("sent")
+  error        String     @default("")
+  messageId    String     @default("")
+  createdAt    DateTime   @default(now())
+}
+
+model MercadoPagoConfig {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  accessToken String
+  publicKey   String
+  logs        MercadoPagoLog[]
+  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime         @default(now())
+}
+
+model MercadoPagoLog {
+  id                String            @id @default(uuid())
+  apiKeyId          String
+  configId          String
+  config            MercadoPagoConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  externalReference String            @default("")
+  preferenceId      String            @default("")
+  paymentId         String            @default("")
+  webhookUrl        String            @default("")
+  checkoutUrl       String            @default("")
+  status            String            @default("pending")
+  amount            Float             @default(0)
+  currency          String            @default("ARS")
+  error             String            @default("")
+  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime          @default(now())
+}

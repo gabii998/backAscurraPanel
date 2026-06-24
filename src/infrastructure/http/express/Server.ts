@@ -56,6 +56,22 @@ import { CreateErrorConfig } from "../../../application/use-cases/CreateErrorCon
 import { ListErrorConfigs } from "../../../application/use-cases/ListErrorConfigs";
 import { GetErrorConfig } from "../../../application/use-cases/GetErrorConfig";
 import { DeleteErrorConfig } from "../../../application/use-cases/DeleteErrorConfig";
+import { SendMail } from "../../../application/use-cases/SendMail";
+import { ListMailConfigs } from "../../../application/use-cases/ListMailConfigs";
+import { CreateMailConfig } from "../../../application/use-cases/CreateMailConfig";
+import { UpdateMailConfig } from "../../../application/use-cases/UpdateMailConfig";
+import { DeleteMailConfig } from "../../../application/use-cases/DeleteMailConfig";
+import { ListMailLogs } from "../../../application/use-cases/ListMailLogs";
+import { ListMailTemplates } from "../../../application/use-cases/ListMailTemplates";
+import { CreateMailTemplate } from "../../../application/use-cases/CreateMailTemplate";
+import { UpdateMailTemplate } from "../../../application/use-cases/UpdateMailTemplate";
+import { DeleteMailTemplate } from "../../../application/use-cases/DeleteMailTemplate";
+import { PrismaMailConfigRepository } from "../../repositories/PrismaMailConfigRepository";
+import { PrismaMailTemplateRepository } from "../../repositories/PrismaMailTemplateRepository";
+import { PrismaMailLogRepository } from "../../repositories/PrismaMailLogRepository";
+import { MailController } from "../../../interfaces/http/controllers/MailController";
+import { buildMailRoutes } from "./routes/mailRoutes";
+import { buildIngestKeyMiddleware } from "./middleware/ingestKeyMiddleware";
 import { CreateNotification } from "../../../application/use-cases/CreateNotification";
 import { GetNotifications } from "../../../application/use-cases/GetNotifications";
 import { GetUnreadCount } from "../../../application/use-cases/GetUnreadCount";
@@ -92,6 +108,18 @@ import { buildNotificationRoutes } from "./routes/notificationRoutes";
 import { buildProspectRoutes } from "./routes/prospectRoutes";
 import { buildErrorConfigRoutes } from "./routes/errorConfigRoutes";
 import { buildCompanionRoutes } from "./routes/companionRoutes";
+import { CreateMPPreference } from "../../../application/use-cases/CreateMPPreference";
+import { GetMPPayment } from "../../../application/use-cases/GetMPPayment";
+import { HandleMPWebhook } from "../../../application/use-cases/HandleMPWebhook";
+import { ListMPConfigs } from "../../../application/use-cases/ListMPConfigs";
+import { CreateMPConfig } from "../../../application/use-cases/CreateMPConfig";
+import { UpdateMPConfig } from "../../../application/use-cases/UpdateMPConfig";
+import { DeleteMPConfig } from "../../../application/use-cases/DeleteMPConfig";
+import { ListMPLogs } from "../../../application/use-cases/ListMPLogs";
+import { PrismaMercadoPagoConfigRepository } from "../../repositories/PrismaMercadoPagoConfigRepository";
+import { PrismaMercadoPagoLogRepository } from "../../repositories/PrismaMercadoPagoLogRepository";
+import { MPController } from "../../../interfaces/http/controllers/MPController";
+import { buildMPRoutes } from "./routes/mpRoutes";
 
 export const buildServer = (): Express => {
   const app = express();
@@ -101,13 +129,13 @@ export const buildServer = (): Express => {
       ? {
           origin: env.corsAllowedOrigins,
           methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-          allowedHeaders: ["Authorization", "Content-Type"],
+          allowedHeaders: ["Authorization", "Content-Type", "x-api-key"],
           optionsSuccessStatus: 204,
         }
       : {
           origin: true,
           methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-          allowedHeaders: ["Authorization", "Content-Type"],
+          allowedHeaders: ["Authorization", "Content-Type", "x-api-key"],
           optionsSuccessStatus: 204,
         };
 
@@ -127,6 +155,11 @@ export const buildServer = (): Express => {
   const notificationRepository    = new PrismaNotificationRepository();
   const errorConfigRepository     = new PrismaErrorConfigRepository();
   const prospectRepository        = new PrismaProspectRepository();
+  const mailConfigRepository      = new PrismaMailConfigRepository();
+  const mailTemplateRepository    = new PrismaMailTemplateRepository();
+  const mailLogRepository         = new PrismaMailLogRepository();
+  const mpConfigRepository        = new PrismaMercadoPagoConfigRepository();
+  const mpLogRepository           = new PrismaMercadoPagoLogRepository();
 
   // Services
   const passwordHasher = new BcryptPasswordHasher();
@@ -220,8 +253,33 @@ export const buildServer = (): Express => {
   const revokeApiKey = new RevokeApiKey(apiKeyRepository);
   const apiKeyController = new ApiKeyController(createApiKey, listApiKeys, revokeApiKey);
 
+  // Mail use cases + controller
+  const sendMail           = new SendMail(mailConfigRepository, mailTemplateRepository, mailLogRepository);
+  const listMailConfigs    = new ListMailConfigs(mailConfigRepository);
+  const createMailConfig   = new CreateMailConfig(mailConfigRepository);
+  const updateMailConfig   = new UpdateMailConfig(mailConfigRepository);
+  const deleteMailConfig   = new DeleteMailConfig(mailConfigRepository);
+  const listMailLogs       = new ListMailLogs(mailLogRepository);
+  const listMailTemplates  = new ListMailTemplates(mailTemplateRepository);
+  const createMailTemplate = new CreateMailTemplate(mailTemplateRepository);
+  const updateMailTemplate = new UpdateMailTemplate(mailTemplateRepository);
+  const deleteMailTemplate = new DeleteMailTemplate(mailTemplateRepository);
+  const mailController     = new MailController(sendMail, listMailConfigs, createMailConfig, updateMailConfig, deleteMailConfig, listMailLogs, listMailTemplates, createMailTemplate, updateMailTemplate, deleteMailTemplate);
+
+  // MercadoPago use cases + controller
+  const createMPPreference = new CreateMPPreference(mpConfigRepository, mpLogRepository);
+  const getMPPayment       = new GetMPPayment(mpConfigRepository);
+  const handleMPWebhook    = new HandleMPWebhook(mpConfigRepository, mpLogRepository);
+  const listMPConfigs      = new ListMPConfigs(mpConfigRepository);
+  const createMPConfig     = new CreateMPConfig(mpConfigRepository);
+  const updateMPConfig     = new UpdateMPConfig(mpConfigRepository);
+  const deleteMPConfig     = new DeleteMPConfig(mpConfigRepository);
+  const listMPLogs         = new ListMPLogs(mpLogRepository);
+  const mpController       = new MPController(createMPPreference, getMPPayment, handleMPWebhook, listMPConfigs, createMPConfig, updateMPConfig, deleteMPConfig, listMPLogs);
+
   // Middleware
-  const authMiddleware = buildAuthMiddleware(tokenService, sessionRepository);
+  const authMiddleware       = buildAuthMiddleware(tokenService, sessionRepository);
+  const ingestKeyMiddleware  = buildIngestKeyMiddleware(apiKeyRepository);
 
   // Routes
   app.use(buildAuthRoutes(authController));
@@ -234,6 +292,8 @@ export const buildServer = (): Express => {
   app.use(buildProspectRoutes(prospectController, authMiddleware));
   app.use(buildErrorConfigRoutes(errorConfigController, authMiddleware));
   app.use(buildCompanionRoutes(authMiddleware));
+  app.use(buildMailRoutes(mailController, authMiddleware, ingestKeyMiddleware));
+  app.use(buildMPRoutes(mpController, authMiddleware, ingestKeyMiddleware));
   app.use(buildProjectRoutes(projectController, taskController, authMiddleware));
   app.use(buildTaskRoutes(taskController, authMiddleware));
   app.use(buildClientRoutes(clientController, authMiddleware));
