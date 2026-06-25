@@ -359,3 +359,50 @@ model MercadoPagoLog {
   updatedAt         DateTime          @updatedAt
   createdAt         DateTime          @default(now())
 }
+
+enum WhatsAppMessageDirection {
+  sent
+  received
+}
+
+model WhatsAppConfig {
+  id                 String            @id @default(uuid())
+  name               String            @unique
+  phoneNumberId      String
+  accessToken        String
+  webhookVerifyToken String
+  businessAccountId  String?
+  apiKeyId           String?
+  messages           WhatsAppMessage[]
+  logs               WhatsAppLog[]
+  updatedAt          DateTime          @updatedAt
+  createdAt          DateTime          @default(now())
+}
+
+model WhatsAppMessage {
+  id        String                   @id @default(uuid())
+  configId  String
+  config    WhatsAppConfig           @relation(fields: [configId], references: [id], onDelete: Cascade)
+  direction WhatsAppMessageDirection
+  from      String
+  to        String
+  body      String
+  type      String                   @default("text")
+  wamid     String                   @default("")
+  status    String                   @default("sent")
+  error     String                   @default("")
+  createdAt DateTime                 @default(now())
+}
+
+model WhatsAppLog {
+  id         String         @id @default(uuid())
+  configId   String
+  config     WhatsAppConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  method     String
+  request    String
+  response   String
+  status     String
+  error      String         @default("")
+  durationMs Int
+  createdAt  DateTime       @default(now())
+}

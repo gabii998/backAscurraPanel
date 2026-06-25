@@ -134,6 +134,23 @@ import { PrismaArcaConfigRepository } from "../../repositories/PrismaArcaConfigR
 import { PrismaArcaLogRepository } from "../../repositories/PrismaArcaLogRepository";
 import { ArcaController } from "../../../interfaces/http/controllers/ArcaController";
 import { buildArcaRoutes } from "./routes/arcaRoutes";
+import { CreateWhatsAppConfig } from "../../../application/use-cases/CreateWhatsAppConfig";
+import { ListWhatsAppConfigs } from "../../../application/use-cases/ListWhatsAppConfigs";
+import { UpdateWhatsAppConfig } from "../../../application/use-cases/UpdateWhatsAppConfig";
+import { DeleteWhatsAppConfig } from "../../../application/use-cases/DeleteWhatsAppConfig";
+import { AssignApiKeyToWhatsAppConfig } from "../../../application/use-cases/AssignApiKeyToWhatsAppConfig";
+import { UnassignApiKeyFromWhatsAppConfig } from "../../../application/use-cases/UnassignApiKeyFromWhatsAppConfig";
+import { SendWhatsAppMessage } from "../../../application/use-cases/SendWhatsAppMessage";
+import { HandleWhatsAppWebhook } from "../../../application/use-cases/HandleWhatsAppWebhook";
+import { ListWhatsAppMessages } from "../../../application/use-cases/ListWhatsAppMessages";
+import { ListWhatsAppLogs } from "../../../application/use-cases/ListWhatsAppLogs";
+import { PrismaWhatsAppConfigRepository } from "../../repositories/PrismaWhatsAppConfigRepository";
+import { PrismaWhatsAppMessageRepository } from "../../repositories/PrismaWhatsAppMessageRepository";
+import { PrismaWhatsAppLogRepository } from "../../repositories/PrismaWhatsAppLogRepository";
+import { WhatsAppController } from "../../../interfaces/http/controllers/WhatsAppController";
+import { buildWhatsAppRoutes } from "./routes/whatsAppRoutes";
+import swaggerUi from "swagger-ui-express";
+import { openApiSpec } from "../swagger/openapi";
 
 export const buildServer = (): Express => {
   const app = express();
@@ -156,6 +173,8 @@ export const buildServer = (): Express => {
   app.use(cors(corsOptions));
   app.options("*", cors(corsOptions));
   app.use(express.json());
+
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
   // Repositories
   const userRepository      = new PrismaUserRepository();
@@ -306,6 +325,22 @@ export const buildServer = (): Express => {
   const listArcaLogs              = new ListArcaLogs(arcaLogRepository);
   const arcaController = new ArcaController(createArcaConfig, updateArcaConfig, deleteArcaConfig, listArcaConfigs, assignApiKeyToArcaConfig, unassignApiKeyFromArcaConfig, createArcaVoucher, getArcaSalesPoints, getArcaTaxpayer, listArcaLogs);
 
+  // WhatsApp use cases + controller
+  const waConfigRepository  = new PrismaWhatsAppConfigRepository();
+  const waMessageRepository = new PrismaWhatsAppMessageRepository();
+  const waLogRepository     = new PrismaWhatsAppLogRepository();
+  const createWhatsAppConfig          = new CreateWhatsAppConfig(waConfigRepository);
+  const listWhatsAppConfigs           = new ListWhatsAppConfigs(waConfigRepository);
+  const updateWhatsAppConfig          = new UpdateWhatsAppConfig(waConfigRepository);
+  const deleteWhatsAppConfig          = new DeleteWhatsAppConfig(waConfigRepository);
+  const assignApiKeyToWhatsApp        = new AssignApiKeyToWhatsAppConfig(waConfigRepository);
+  const unassignApiKeyFromWhatsApp    = new UnassignApiKeyFromWhatsAppConfig(waConfigRepository);
+  const sendWhatsAppMessage           = new SendWhatsAppMessage(waConfigRepository, waMessageRepository, waLogRepository);
+  const handleWhatsAppWebhook         = new HandleWhatsAppWebhook(waConfigRepository, waMessageRepository);
+  const listWhatsAppMessages          = new ListWhatsAppMessages(waMessageRepository);
+  const listWhatsAppLogs              = new ListWhatsAppLogs(waLogRepository);
+  const whatsAppController = new WhatsAppController(createWhatsAppConfig, listWhatsAppConfigs, updateWhatsAppConfig, deleteWhatsAppConfig, assignApiKeyToWhatsApp, unassignApiKeyFromWhatsApp, sendWhatsAppMessage, handleWhatsAppWebhook, listWhatsAppMessages, listWhatsAppLogs);
+
   // Middleware
   const authMiddleware       = buildAuthMiddleware(tokenService, sessionRepository);
   const ingestKeyMiddleware  = buildIngestKeyMiddleware(apiKeyRepository);
@@ -324,6 +359,7 @@ export const buildServer = (): Express => {
   app.use(buildMailRoutes(mailController, authMiddleware, ingestKeyMiddleware));
   app.use(buildMPRoutes(mpController, authMiddleware, ingestKeyMiddleware));
   app.use(buildArcaRoutes(arcaController, authMiddleware, ingestKeyMiddleware));
+  app.use(buildWhatsAppRoutes(whatsAppController, authMiddleware, ingestKeyMiddleware));
   app.use(buildProjectRoutes(projectController, taskController, authMiddleware));
   app.use(buildTaskRoutes(taskController, authMiddleware));
   app.use(buildClientRoutes(clientController, authMiddleware));
