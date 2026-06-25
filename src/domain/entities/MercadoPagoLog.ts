@@ -1,6 +1,5 @@
 export interface MercadoPagoLog {
   id: string;
-  apiKeyId: string;
   configId: string;
   externalReference: string;
   preferenceId: string;

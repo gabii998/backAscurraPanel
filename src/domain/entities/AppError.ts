@@ -3,7 +3,7 @@ export type ErrorStatus   = "unresolved" | "resolved" | "ignored";
 
 export interface AppError {
   id: string;
-  projectId: string | null;
+  errorConfigId: string | null;
   type: string;
   message: string;
   severity: ErrorSeverity;

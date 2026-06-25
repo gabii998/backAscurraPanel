@@ -13,12 +13,12 @@ export class ErrorConfigController {
   ) {}
 
   async handleCreate(req: Request, res: Response): Promise<void> {
-    const { name, projectId, apiKeyId } = req.body as Record<string, string | undefined>;
+    const { name, apiKeyId } = req.body as Record<string, string | undefined>;
     if (!name) {
       res.status(400).json({ message: "MISSING_FIELDS" });
       return;
     }
-    const config = await this.createErrorConfig.execute({ name, projectId, apiKeyId });
+    const config = await this.createErrorConfig.execute({ name, apiKeyId });
     const detail = await this.getErrorConfig.execute(config.id);
     res.status(201).json(detail);
   }

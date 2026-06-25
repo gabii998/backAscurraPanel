@@ -1,0 +1,297 @@
+erDiagram
+    User {
+        String id PK
+        String name
+        String email
+        String password
+        String role
+        String initials
+        String color
+        String bio
+        String resetToken
+        DateTime resetTokenExpiry
+        DateTime createdAt
+        DateTime deletedAt
+    }
+
+    UserNotifSettings {
+        String id PK
+        String userId FK
+        Boolean newProject
+        Boolean taskAssigned
+        Boolean taskComment
+        Boolean deployDone
+        Boolean weeklyDigest
+        Boolean clientUpdate
+    }
+
+    Session {
+        String id PK
+        String jti
+        String userId FK
+        String ipAddress
+        String userAgent
+        DateTime createdAt
+        DateTime lastSeenAt
+        DateTime expiresAt
+        DateTime revokedAt
+    }
+
+    Workspace {
+        String id PK
+        String name
+        String timezone
+        String language
+        String inviteToken
+        DateTime updatedAt
+        DateTime createdAt
+    }
+
+    Project {
+        String id PK
+        String name
+        String stack
+        String status
+        Int progress
+        DateTime updatedAt
+        DateTime createdAt
+        DateTime deletedAt
+    }
+
+
+    ProjectMember {
+        String projectId FK
+        String userId FK
+    }
+
+    Task {
+        String id PK
+        String projectId FK
+        String title
+        String description
+        String priority
+        String column
+        String[] labels
+        String dueDate
+        Int subtasksDone
+        Int subtasksTotal
+        String assigneeId FK
+        String createdById FK
+        DateTime createdAt
+        DateTime deletedAt
+    }
+
+    Client {
+        String id PK
+        String company
+        String industry
+        String contactName
+        String contactEmail
+        String status
+        String contractSince
+        DateTime lastActivity
+        String initials
+        String color
+        DateTime createdAt
+        DateTime deletedAt
+    }
+
+    ClientProject {
+        String clientId FK
+        String projectId FK
+    }
+
+    AppError {
+        String id PK
+        String errorConfigId FK
+        String type
+        String message
+        String severity
+        String status
+        Int count
+        Int usersAffected
+        String stackTrace
+        DateTime firstSeen
+        DateTime lastSeen
+        String metaUrl
+        String metaBrowser
+        String metaOs
+        String metaUser
+        DateTime createdAt
+        DateTime deletedAt
+    }
+
+    ErrorOccurrence {
+        String id PK
+        String errorId FK
+        String userId
+        String url
+        String browser
+        String os
+        DateTime createdAt
+    }
+
+    Notification {
+        String id PK
+        String userId FK
+        String type
+        String title
+        String body
+        String entityId
+        Boolean read
+        DateTime createdAt
+    }
+
+    ApiKey {
+        String id PK
+        String name
+        String keyHash
+        String prefix
+        DateTime createdAt
+        DateTime revokedAt
+    }
+
+    ErrorConfig {
+        String id PK
+        String name
+        String apiKeyId FK
+        DateTime createdAt
+    }
+
+    Prospect {
+        String id PK
+        String name
+        String industry
+        String city
+        String address
+        String phone
+        String website
+        String hours
+        String socialMedia
+        Boolean hasWebsite
+        Boolean hasSocialMedia
+        Float rating
+        Int reviewCount
+        Int score
+        String scoreLabel
+        String stage
+        String notes
+        String googleId
+        DateTime createdAt
+    }
+
+    MailConfig {
+        String id PK
+        String name
+        String host
+        Int port
+        String user
+        String pass
+        String from
+        String apiKeyId FK
+        DateTime updatedAt
+        DateTime createdAt
+    }
+
+    MailTemplate {
+        String id PK
+        String configId FK
+        String name
+        String subject
+        String html
+        String[] params
+        DateTime updatedAt
+        DateTime createdAt
+    }
+
+    MailLog {
+        String id PK
+        String configId FK
+        String to
+        String subject
+        String templateName
+        String status
+        String error
+        String messageId
+        DateTime createdAt
+    }
+
+    ArcaConfig {
+        String id PK
+        String name
+        String cuit
+        String cert
+        String privateKey
+        Boolean production
+        String apiKeyId FK
+        DateTime updatedAt
+        DateTime createdAt
+    }
+
+    ArcaLog {
+        String id PK
+        String configId FK
+        String service
+        String method
+        String request
+        String response
+        String status
+        String error
+        Int durationMs
+        DateTime updatedAt
+        DateTime createdAt
+    }
+
+    MercadoPagoConfig {
+        String id PK
+        String name
+        String accessToken
+        String publicKey
+        String apiKeyId FK
+        DateTime updatedAt
+        DateTime createdAt
+    }
+
+    MercadoPagoLog {
+        String id PK
+        String configId FK
+        String externalReference
+        String preferenceId
+        String paymentId
+        String webhookUrl
+        String checkoutUrl
+        String status
+        Float amount
+        String currency
+        String error
+        DateTime updatedAt
+        DateTime createdAt
+    }
+
+    User ||--|| UserNotifSettings : "has"
+    User ||--o{ Session : "has"
+    User ||--o{ ProjectMember : "belongs to"
+    User ||--o{ Task : "assigned to"
+    User ||--o{ Task : "created by"
+    User ||--o{ Notification : "receives"
+
+    Project ||--o{ ProjectMember : "has"
+    Project ||--o{ Task : "contains"
+    Project ||--o{ ClientProject : "linked to"
+
+    Client ||--o{ ClientProject : "linked to"
+
+    AppError ||--o{ ErrorOccurrence : "has"
+
+    ApiKey ||--o{ ErrorConfig : "used in"
+    ErrorConfig ||--o{ AppError : "has"
+    ApiKey ||--o| ArcaConfig : "used in"
+    ApiKey ||--o| MailConfig : "used in"
+    ApiKey ||--o| MercadoPagoConfig : "used in"
+
+    MailConfig ||--o{ MailTemplate : "has"
+    MailConfig ||--o{ MailLog : "has"
+
+    ArcaConfig ||--o{ ArcaLog : "has"
+
+    MercadoPagoConfig ||--o{ MercadoPagoLog : "has"

@@ -1,6 +1,5 @@
 export interface MailLog {
   id: string;
-  apiKeyId: string;
   configId: string;
   to: string;
   subject: string;

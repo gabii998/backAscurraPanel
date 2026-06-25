@@ -5,7 +5,7 @@ export interface ErrorIngestData {
   message: string;
   severity?: ErrorSeverity;
   stackTrace?: string;
-  projectId?: string;
+  errorConfigId?: string;
   meta?: {
     url?: string;
     browser?: string;

@@ -32,7 +32,6 @@ export class MailController {
 
     try {
       const result = await this.sendMail.execute({
-        apiKeyId,
         config:   typeof config === "string" ? config : "",
         to:       typeof to === "string" ? to : "",
         template: typeof template === "string" ? template : undefined,

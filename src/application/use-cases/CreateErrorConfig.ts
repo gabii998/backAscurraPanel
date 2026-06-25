@@ -5,11 +5,10 @@ import type { ErrorConfigRepository } from "../../domain/repositories/ErrorConfi
 export class CreateErrorConfig {
   constructor(private readonly repo: ErrorConfigRepository) {}
 
-  async execute(data: { name: string; projectId?: string; apiKeyId?: string }): Promise<ErrorConfig> {
+  async execute(data: { name: string; apiKeyId?: string }): Promise<ErrorConfig> {
     const config: ErrorConfig = {
       id:        randomUUID(),
       name:      data.name,
-      projectId: data.projectId ?? null,
       apiKeyId:  data.apiKeyId ?? null,
       createdAt: new Date(),
     };

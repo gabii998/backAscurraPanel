@@ -12,7 +12,6 @@ export interface MPItem {
 }
 
 export interface CreateMPPreferenceInput {
-  apiKeyId: string;
   config: string;
   items: MPItem[];
   externalReference?: string;
@@ -65,7 +64,6 @@ export class CreateMPPreference {
       });
     } catch (err) {
       await this.logRepo.create({
-        apiKeyId:          input.apiKeyId,
         configId:          config.id,
         externalReference: input.externalReference ?? "",
         preferenceId:      "",
@@ -84,7 +82,6 @@ export class CreateMPPreference {
     const sandboxCheckoutUrl = preference.sandbox_init_point ?? "";
 
     await this.logRepo.create({
-      apiKeyId:          input.apiKeyId,
       configId:          config.id,
       externalReference: input.externalReference ?? "",
       preferenceId:      preference.id ?? "",

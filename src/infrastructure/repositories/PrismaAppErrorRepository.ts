@@ -3,9 +3,9 @@ import type { AppError, ErrorSeverity, ErrorStatus, OccurrenceData } from "../..
 import { prisma } from "../db/prisma";
 
 export class PrismaAppErrorRepository implements AppErrorRepository {
-  async findByFingerprint(projectId: string | null, type: string, message: string): Promise<AppError | null> {
+  async findByFingerprint(errorConfigId: string | null, type: string, message: string): Promise<AppError | null> {
     const row = await prisma.appError.findFirst({
-      where: { projectId: projectId ?? null, type, message, deletedAt: null },
+      where: { errorConfigId: errorConfigId ?? null, type, message, deletedAt: null },
     });
     return row ? this.toEntity(row, []) : null;
   }
@@ -21,9 +21,9 @@ export class PrismaAppErrorRepository implements AppErrorRepository {
     const rows = await prisma.appError.findMany({
       where: {
         deletedAt: null,
-        ...(filter.severity ? { severity: filter.severity } : {}),
-        ...(filter.status   ? { status:   filter.status   } : {}),
-        ...(filter.projectId ? { projectId: filter.projectId } : {}),
+        ...(filter.severity      ? { severity:      filter.severity      } : {}),
+        ...(filter.status        ? { status:         filter.status        } : {}),
+        ...(filter.errorConfigId ? { errorConfigId:  filter.errorConfigId } : {}),
         ...(filter.query
           ? {
               OR: [
@@ -48,7 +48,7 @@ export class PrismaAppErrorRepository implements AppErrorRepository {
     await prisma.appError.create({
       data: {
         id:            error.id,
-        projectId:     error.projectId,
+        errorConfigId: error.errorConfigId,
         type:          error.type,
         message:       error.message,
         severity:      error.severity,
@@ -132,7 +132,7 @@ export class PrismaAppErrorRepository implements AppErrorRepository {
   private toEntity(
     row: {
       id: string;
-      projectId: string | null;
+      errorConfigId: string | null;
       type: string;
       message: string;
       severity: string;
@@ -153,7 +153,7 @@ export class PrismaAppErrorRepository implements AppErrorRepository {
   ): AppError {
     return {
       id:            row.id,
-      projectId:     row.projectId,
+      errorConfigId: row.errorConfigId,
       type:          row.type,
       message:       row.message,
       severity:      row.severity as ErrorSeverity,

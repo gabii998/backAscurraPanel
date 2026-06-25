@@ -1,0 +1,158 @@
+import type { Request, Response } from "express";
+import type { CreateArcaConfig } from "../../../application/use-cases/CreateArcaConfig";
+import type { UpdateArcaConfig } from "../../../application/use-cases/UpdateArcaConfig";
+import type { DeleteArcaConfig } from "../../../application/use-cases/DeleteArcaConfig";
+import type { ListArcaConfigs } from "../../../application/use-cases/ListArcaConfigs";
+import type { AssignApiKeyToArcaConfig } from "../../../application/use-cases/AssignApiKeyToArcaConfig";
+import type { UnassignApiKeyFromArcaConfig } from "../../../application/use-cases/UnassignApiKeyFromArcaConfig";
+import type { CreateArcaVoucher } from "../../../application/use-cases/CreateArcaVoucher";
+import type { GetArcaSalesPoints } from "../../../application/use-cases/GetArcaSalesPoints";
+import type { GetArcaTaxpayer } from "../../../application/use-cases/GetArcaTaxpayer";
+import type { ListArcaLogs } from "../../../application/use-cases/ListArcaLogs";
+import type { ApiKeyRequest } from "../../../infrastructure/http/express/middleware/ingestKeyMiddleware";
+
+export class ArcaController {
+  constructor(
+    private createArcaConfig:          CreateArcaConfig,
+    private updateArcaConfig:          UpdateArcaConfig,
+    private deleteArcaConfig:          DeleteArcaConfig,
+    private listArcaConfigs:           ListArcaConfigs,
+    private assignApiKeyToArcaConfig:  AssignApiKeyToArcaConfig,
+    private unassignApiKeyFromArcaConfig: UnassignApiKeyFromArcaConfig,
+    private createArcaVoucher:         CreateArcaVoucher,
+    private getArcaSalesPoints:        GetArcaSalesPoints,
+    private getArcaTaxpayer:           GetArcaTaxpayer,
+    private listArcaLogs:              ListArcaLogs,
+  ) {}
+
+  // ── Configs (JWT + admin) ─────────────────────────────
+
+  handleListConfigs = async (_req: Request, res: Response): Promise<void> => {
+    const configs = await this.listArcaConfigs.execute();
+    res.json(configs);
+  };
+
+  handleCreateConfig = async (req: Request, res: Response): Promise<void> => {
+    const { name, cuit, cert, privateKey, production } = req.body as Record<string, unknown>;
+    try {
+      const cfg = await this.createArcaConfig.execute({
+        name:       typeof name       === "string"  ? name       : "",
+        cuit:       typeof cuit       === "string"  ? cuit       : "",
+        cert:       typeof cert       === "string"  ? cert       : "",
+        privateKey: typeof privateKey === "string"  ? privateKey : "",
+        production: typeof production === "boolean" ? production : false,
+      });
+      res.status(201).json(cfg);
+    } catch (err) {
+      if (err instanceof Error && err.message === "MISSING_FIELDS") {
+        res.status(400).json({ message: err.message }); return;
+      }
+      throw err;
+    }
+  };
+
+  handleUpdateConfig = async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const { name, cuit, cert, privateKey, production } = req.body as Record<string, unknown>;
+    try {
+      const cfg = await this.updateArcaConfig.execute(id, {
+        ...(typeof name       === "string"  && { name }),
+        ...(typeof cuit       === "string"  && { cuit }),
+        ...(typeof cert       === "string"  && cert && { cert }),
+        ...(typeof privateKey === "string"  && privateKey && { privateKey }),
+        ...(typeof production === "boolean" && { production }),
+      });
+      res.json(cfg);
+    } catch (err) {
+      if (err instanceof Error && err.message === "ARCA_CONFIG_NOT_FOUND") {
+        res.status(404).json({ message: err.message }); return;
+      }
+      throw err;
+    }
+  };
+
+  handleDeleteConfig = async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    try {
+      await this.deleteArcaConfig.execute(id);
+      res.status(204).end();
+    } catch (err) {
+      if (err instanceof Error && err.message === "ARCA_CONFIG_NOT_FOUND") {
+        res.status(404).json({ message: err.message }); return;
+      }
+      throw err;
+    }
+  };
+
+  handleAssignApiKey = async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const { apiKeyId } = req.body as Record<string, unknown>;
+    try {
+      await this.assignApiKeyToArcaConfig.execute(id, typeof apiKeyId === "string" ? apiKeyId : "");
+      res.status(204).end();
+    } catch (err) {
+      if (err instanceof Error && err.message === "ARCA_CONFIG_NOT_FOUND") {
+        res.status(404).json({ message: err.message }); return;
+      }
+      throw err;
+    }
+  };
+
+  handleUnassignApiKey = async (req: Request, res: Response): Promise<void> => {
+    const { apiKeyId } = req.params;
+    await this.unassignApiKeyFromArcaConfig.execute(apiKeyId);
+    res.status(204).end();
+  };
+
+  // ── Logs (JWT) ────────────────────────────────────────
+
+  handleListLogs = async (req: Request, res: Response): Promise<void> => {
+    const { configId } = req.params;
+    const limit = typeof req.query["limit"] === "string" ? parseInt(req.query["limit"], 10) : undefined;
+    const logs = await this.listArcaLogs.execute(configId, limit);
+    res.json(logs);
+  };
+
+  // ── Operations (ingestKey) ────────────────────────────
+
+  handleCreateVoucher = async (req: Request, res: Response): Promise<void> => {
+    const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
+    const { voucher } = req.body as Record<string, unknown>;
+    try {
+      const result = await this.createArcaVoucher.execute(apiKeyId, voucher);
+      res.status(201).json(result);
+    } catch (err) {
+      if (!(err instanceof Error)) throw err;
+      if (err.message === "ARCA_NOT_CONFIGURED") { res.status(403).json({ message: err.message }); return; }
+      if (err.message === "ARCA_VOUCHER_FAILED")  { res.status(502).json({ message: err.message }); return; }
+      throw err;
+    }
+  };
+
+  handleGetSalesPoints = async (req: Request, res: Response): Promise<void> => {
+    const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
+    try {
+      const result = await this.getArcaSalesPoints.execute(apiKeyId);
+      res.json(result);
+    } catch (err) {
+      if (!(err instanceof Error)) throw err;
+      if (err.message === "ARCA_NOT_CONFIGURED")  { res.status(403).json({ message: err.message }); return; }
+      if (err.message === "ARCA_REQUEST_FAILED")   { res.status(502).json({ message: err.message }); return; }
+      throw err;
+    }
+  };
+
+  handleGetTaxpayer = async (req: Request, res: Response): Promise<void> => {
+    const apiKeyId    = (req as ApiKeyRequest).apiKey?.id ?? "";
+    const identifier  = parseInt(req.params["identifier"] ?? "", 10);
+    try {
+      const result = await this.getArcaTaxpayer.execute(apiKeyId, identifier);
+      res.json(result);
+    } catch (err) {
+      if (!(err instanceof Error)) throw err;
+      if (err.message === "ARCA_NOT_CONFIGURED")  { res.status(403).json({ message: err.message }); return; }
+      if (err.message === "ARCA_REQUEST_FAILED")   { res.status(502).json({ message: err.message }); return; }
+      throw err;
+    }
+  };
+}

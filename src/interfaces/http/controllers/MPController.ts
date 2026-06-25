@@ -28,7 +28,6 @@ export class MPController {
 
     try {
       const result = await this.createMPPreference.execute({
-        apiKeyId,
         config:            typeof config === "string" ? config : "",
         items:             Array.isArray(items) ? items as never : [],
         externalReference: typeof external_reference === "string" ? external_reference : undefined,

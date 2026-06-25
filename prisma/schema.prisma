@@ -8,23 +8,36 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  name          String
-  email         String    @unique
-  password      String
-  role          String    @default("member")
-  initials      String
-  color         String
-  bio           String    @default("")
-  notifSettings    Json?
+  id               String             @id @default(uuid())
+  name             String
+  email            String             @unique
+  password         String
+  role             String             @default("member")
+  initials         String
+  color            String
+  bio              String             @default("")
   resetToken       String?
   resetTokenExpiry DateTime?
-  createdAt        DateTime  @default(now())
+  createdAt        DateTime           @default(now())
   deletedAt        DateTime?
-  tasks         Task[]    @relation("TaskAssignee")
-  projects      ProjectMember[]
-  sessions      Session[]
-  notifications Notification[]
+  tasks            Task[]             @relation("TaskAssignee")
+  createdTasks     Task[]             @relation("TaskCreator")
+  projects         ProjectMember[]
+  sessions         Session[]
+  notifications    Notification[]
+  notifSettings    UserNotifSettings?
+}
+
+model UserNotifSettings {
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  newProject   Boolean @default(true)
+  taskAssigned Boolean @default(true)
+  taskComment  Boolean @default(true)
+  deployDone   Boolean @default(true)
+  weeklyDigest Boolean @default(true)
+  clientUpdate Boolean @default(true)
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Session {
@@ -59,11 +72,9 @@ model Project {
   updatedAt    DateTime      @updatedAt
   createdAt    DateTime      @default(now())
   deletedAt    DateTime?
-  tasks        Task[]
-  members      ProjectMember[]
-  clients      ClientProject[]
-  errors       AppError[]
-  errorConfigs ErrorConfig[]
+  tasks   Task[]
+  members ProjectMember[]
+  clients ClientProject[]
 }
 
 enum ProjectStatus {
@@ -93,10 +104,12 @@ model Task {
   subtasksDone  Int       @default(0)
   subtasksTotal Int       @default(0)
   assigneeId    String?
+  createdById   String?
   createdAt     DateTime  @default(now())
   deletedAt     DateTime?
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee      User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy     User?     @relation("TaskCreator", fields: [createdById], references: [id])
 }
 
 enum Priority {
@@ -145,25 +158,25 @@ model ClientProject {
 }
 
 model AppError {
-  id            String        @id @default(uuid())
-  projectId     String?
-  type          String
-  message       String
-  severity      ErrorSeverity @default(error)
-  status        ErrorStatus   @default(unresolved)
-  count         Int           @default(1)
-  usersAffected Int           @default(0)
-  stackTrace    String        @default("")
-  firstSeen     DateTime      @default(now())
-  lastSeen      DateTime      @default(now())
-  metaUrl       String        @default("")
-  metaBrowser   String        @default("")
-  metaOs        String        @default("")
-  metaUser      String        @default("")
-  createdAt     DateTime      @default(now())
-  deletedAt     DateTime?
-  project       Project?      @relation(fields: [projectId], references: [id])
-  occurrences   ErrorOccurrence[]
+  id              String          @id @default(uuid())
+  errorConfigId   String?
+  type            String
+  message         String
+  severity        ErrorSeverity   @default(error)
+  status          ErrorStatus     @default(unresolved)
+  count           Int             @default(1)
+  usersAffected   Int             @default(0)
+  stackTrace      String          @default("")
+  firstSeen       DateTime        @default(now())
+  lastSeen        DateTime        @default(now())
+  metaUrl         String          @default("")
+  metaBrowser     String          @default("")
+  metaOs          String          @default("")
+  metaUser        String          @default("")
+  createdAt       DateTime        @default(now())
+  deletedAt       DateTime?
+  errorConfig     ErrorConfig?    @relation(fields: [errorConfigId], references: [id])
+  occurrences     ErrorOccurrence[]
 }
 
 enum ErrorSeverity {
@@ -212,13 +225,12 @@ model ApiKey {
 }
 
 model ErrorConfig {
-  id        String    @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  projectId String?
   apiKeyId  String?
-  createdAt DateTime  @default(now())
-  project   Project?  @relation(fields: [projectId], references: [id])
-  apiKey    ApiKey?   @relation(fields: [apiKeyId], references: [id])
+  createdAt DateTime   @default(now())
+  apiKey    ApiKey?    @relation(fields: [apiKeyId], references: [id])
+  errors    AppError[]
 }
 
 model Prospect {
@@ -258,6 +270,7 @@ model MailConfig {
   user      String
   pass      String
   from      String
+  apiKeyId  String?
   templates MailTemplate[]
   logs      MailLog[]
   updatedAt DateTime       @updatedAt
@@ -280,7 +293,6 @@ model MailTemplate {
 
 model MailLog {
   id           String     @id @default(uuid())
-  apiKeyId     String
   configId     String
   config       MailConfig @relation(fields: [configId], references: [id])
   to           String
@@ -292,11 +304,40 @@ model MailLog {
   createdAt    DateTime   @default(now())
 }
 
+model ArcaConfig {
+  id         String    @id @default(uuid())
+  name       String    @unique
+  cuit       String
+  cert       String
+  privateKey String
+  production Boolean   @default(false)
+  apiKeyId   String?
+  logs       ArcaLog[]
+  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime  @default(now())
+}
+
+model ArcaLog {
+  id         String     @id @default(uuid())
+  configId   String
+  config     ArcaConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  service    String
+  method     String
+  request    String
+  response   String
+  status     String     @default("ok")
+  error      String     @default("")
+  durationMs Int        @default(0)
+  updatedAt  DateTime   @updatedAt
+  createdAt  DateTime   @default(now())
+}
+
 model MercadoPagoConfig {
   id          String           @id @default(uuid())
   name        String           @unique
   accessToken String
   publicKey   String
+  apiKeyId    String?
   logs        MercadoPagoLog[]
   updatedAt   DateTime         @updatedAt
   createdAt   DateTime         @default(now())
@@ -304,7 +345,6 @@ model MercadoPagoConfig {
 
 model MercadoPagoLog {
   id                String            @id @default(uuid())
-  apiKeyId          String
   configId          String
   config            MercadoPagoConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
   externalReference String            @default("")

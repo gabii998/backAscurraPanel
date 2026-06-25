@@ -26,11 +26,11 @@ export class ErrorController {
   }
 
   async handleList(req: Request, res: Response): Promise<void> {
-    const { severity, status, projectId, q } = req.query as Record<string, string | undefined>;
+    const { severity, status, errorConfigId, q } = req.query as Record<string, string | undefined>;
     const errors = await this.listErrors.execute({
       severity:  severity  as ErrorSeverity | undefined,
       status:    status    as ErrorStatus   | undefined,
-      projectId,
+      errorConfigId,
       query: q,
     });
     res.json(errors);

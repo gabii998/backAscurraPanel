@@ -7,9 +7,9 @@ export class IngestError {
   constructor(private readonly repository: AppErrorRepository) {}
 
   async execute(data: ErrorIngestData): Promise<AppError> {
-    const projectId = data.projectId ?? null;
-    const userId    = data.meta?.user ?? null;
-    const now       = new Date();
+    const errorConfigId = data.errorConfigId ?? null;
+    const userId        = data.meta?.user ?? null;
+    const now           = new Date();
 
     const occurrence = {
       userId,
@@ -18,7 +18,7 @@ export class IngestError {
       os:      data.meta?.os      ?? "",
     };
 
-    const existing = await this.repository.findByFingerprint(projectId, data.type, data.message);
+    const existing = await this.repository.findByFingerprint(errorConfigId, data.type, data.message);
 
     if (existing) {
       const isKnownUser = userId ? await this.repository.isUserKnown(existing.id, userId) : true;
@@ -34,7 +34,7 @@ export class IngestError {
 
     const error: AppError = {
       id:            randomUUID(),
-      projectId,
+      errorConfigId,
       type:          data.type,
       message:       data.message,
       severity:      data.severity ?? "error",

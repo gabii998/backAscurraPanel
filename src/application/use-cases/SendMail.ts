@@ -5,7 +5,6 @@ import type { MailSender } from "../services/MailSender";
 import { NodemailerMailSender } from "../../infrastructure/services/NodemailerMailSender";
 
 export interface SendMailInput {
-  apiKeyId: string;
   config: string;       // nombre de la MailConfig a usar
   to: string;
   template?: string;
@@ -69,7 +68,6 @@ export class SendMail {
     }
 
     await this.logRepo.create({
-      apiKeyId:     input.apiKeyId,
       configId:     config.id,
       to:           input.to,
       subject:      resolvedSubject,

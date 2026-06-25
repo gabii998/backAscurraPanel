@@ -120,6 +120,20 @@ import { PrismaMercadoPagoConfigRepository } from "../../repositories/PrismaMerc
 import { PrismaMercadoPagoLogRepository } from "../../repositories/PrismaMercadoPagoLogRepository";
 import { MPController } from "../../../interfaces/http/controllers/MPController";
 import { buildMPRoutes } from "./routes/mpRoutes";
+import { CreateArcaConfig } from "../../../application/use-cases/CreateArcaConfig";
+import { UpdateArcaConfig } from "../../../application/use-cases/UpdateArcaConfig";
+import { DeleteArcaConfig } from "../../../application/use-cases/DeleteArcaConfig";
+import { ListArcaConfigs } from "../../../application/use-cases/ListArcaConfigs";
+import { AssignApiKeyToArcaConfig } from "../../../application/use-cases/AssignApiKeyToArcaConfig";
+import { UnassignApiKeyFromArcaConfig } from "../../../application/use-cases/UnassignApiKeyFromArcaConfig";
+import { CreateArcaVoucher } from "../../../application/use-cases/CreateArcaVoucher";
+import { GetArcaSalesPoints } from "../../../application/use-cases/GetArcaSalesPoints";
+import { GetArcaTaxpayer } from "../../../application/use-cases/GetArcaTaxpayer";
+import { ListArcaLogs } from "../../../application/use-cases/ListArcaLogs";
+import { PrismaArcaConfigRepository } from "../../repositories/PrismaArcaConfigRepository";
+import { PrismaArcaLogRepository } from "../../repositories/PrismaArcaLogRepository";
+import { ArcaController } from "../../../interfaces/http/controllers/ArcaController";
+import { buildArcaRoutes } from "./routes/arcaRoutes";
 
 export const buildServer = (): Express => {
   const app = express();
@@ -160,6 +174,8 @@ export const buildServer = (): Express => {
   const mailLogRepository         = new PrismaMailLogRepository();
   const mpConfigRepository        = new PrismaMercadoPagoConfigRepository();
   const mpLogRepository           = new PrismaMercadoPagoLogRepository();
+  const arcaConfigRepository      = new PrismaArcaConfigRepository();
+  const arcaLogRepository         = new PrismaArcaLogRepository();
 
   // Services
   const passwordHasher = new BcryptPasswordHasher();
@@ -277,6 +293,19 @@ export const buildServer = (): Express => {
   const listMPLogs         = new ListMPLogs(mpLogRepository);
   const mpController       = new MPController(createMPPreference, getMPPayment, handleMPWebhook, listMPConfigs, createMPConfig, updateMPConfig, deleteMPConfig, listMPLogs);
 
+  // ARCA use cases + controller
+  const createArcaConfig          = new CreateArcaConfig(arcaConfigRepository);
+  const updateArcaConfig          = new UpdateArcaConfig(arcaConfigRepository);
+  const deleteArcaConfig          = new DeleteArcaConfig(arcaConfigRepository);
+  const listArcaConfigs           = new ListArcaConfigs(arcaConfigRepository);
+  const assignApiKeyToArcaConfig  = new AssignApiKeyToArcaConfig(arcaConfigRepository);
+  const unassignApiKeyFromArcaConfig = new UnassignApiKeyFromArcaConfig(arcaConfigRepository);
+  const createArcaVoucher         = new CreateArcaVoucher(arcaConfigRepository, arcaLogRepository);
+  const getArcaSalesPoints        = new GetArcaSalesPoints(arcaConfigRepository, arcaLogRepository);
+  const getArcaTaxpayer           = new GetArcaTaxpayer(arcaConfigRepository, arcaLogRepository);
+  const listArcaLogs              = new ListArcaLogs(arcaLogRepository);
+  const arcaController = new ArcaController(createArcaConfig, updateArcaConfig, deleteArcaConfig, listArcaConfigs, assignApiKeyToArcaConfig, unassignApiKeyFromArcaConfig, createArcaVoucher, getArcaSalesPoints, getArcaTaxpayer, listArcaLogs);
+
   // Middleware
   const authMiddleware       = buildAuthMiddleware(tokenService, sessionRepository);
   const ingestKeyMiddleware  = buildIngestKeyMiddleware(apiKeyRepository);
@@ -294,6 +323,7 @@ export const buildServer = (): Express => {
   app.use(buildCompanionRoutes(authMiddleware));
   app.use(buildMailRoutes(mailController, authMiddleware, ingestKeyMiddleware));
   app.use(buildMPRoutes(mpController, authMiddleware, ingestKeyMiddleware));
+  app.use(buildArcaRoutes(arcaController, authMiddleware, ingestKeyMiddleware));
   app.use(buildProjectRoutes(projectController, taskController, authMiddleware));
   app.use(buildTaskRoutes(taskController, authMiddleware));
   app.use(buildClientRoutes(clientController, authMiddleware));

@@ -4,12 +4,12 @@ import type { ErrorSeverity } from "../entities/AppError";
 export interface ListErrorsFilter {
   severity?: ErrorSeverity;
   status?: ErrorStatus;
-  projectId?: string;
+  errorConfigId?: string;
   query?: string;
 }
 
 export interface AppErrorRepository {
-  findByFingerprint(projectId: string | null, type: string, message: string): Promise<AppError | null>;
+  findByFingerprint(errorConfigId: string | null, type: string, message: string): Promise<AppError | null>;
   findById(id: string): Promise<AppError | null>;
   list(filter: ListErrorsFilter): Promise<AppError[]>;
   create(error: AppError): Promise<AppError>;

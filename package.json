@@ -14,12 +14,14 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:erd": "mmdc -i prisma/erd.mmd -o prisma/erd.svg -p puppeteer-config.json",
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
   },
   "dependencies": {
+    "@arcasdk/core": "^2.0.0",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -31,6 +33,7 @@
     "prisma": "^5.22.0"
   },
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.15.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
