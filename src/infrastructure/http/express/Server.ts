@@ -149,6 +149,12 @@ import { PrismaWhatsAppMessageRepository } from "../../repositories/PrismaWhatsA
 import { PrismaWhatsAppLogRepository } from "../../repositories/PrismaWhatsAppLogRepository";
 import { WhatsAppController } from "../../../interfaces/http/controllers/WhatsAppController";
 import { buildWhatsAppRoutes } from "./routes/whatsAppRoutes";
+import { CreateContactRequest } from "../../../application/use-cases/CreateContactRequest";
+import { ListContactRequests } from "../../../application/use-cases/ListContactRequests";
+import { UpdateContactRequestStatus } from "../../../application/use-cases/UpdateContactRequestStatus";
+import { PrismaContactRequestRepository } from "../../repositories/PrismaContactRequestRepository";
+import { ContactController } from "../../../interfaces/http/controllers/ContactController";
+import { buildContactRoutes } from "./routes/contactRoutes";
 import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "../swagger/openapi";
 
@@ -195,6 +201,7 @@ export const buildServer = (): Express => {
   const mpLogRepository           = new PrismaMercadoPagoLogRepository();
   const arcaConfigRepository      = new PrismaArcaConfigRepository();
   const arcaLogRepository         = new PrismaArcaLogRepository();
+  const contactRequestRepository  = new PrismaContactRequestRepository();
 
   // Services
   const passwordHasher = new BcryptPasswordHasher();
@@ -363,6 +370,13 @@ export const buildServer = (): Express => {
   app.use(buildProjectRoutes(projectController, taskController, authMiddleware));
   app.use(buildTaskRoutes(taskController, authMiddleware));
   app.use(buildClientRoutes(clientController, authMiddleware));
+
+  // Contact requests use cases + controller
+  const createContactRequest       = new CreateContactRequest(contactRequestRepository);
+  const listContactRequests        = new ListContactRequests(contactRequestRepository);
+  const updateContactRequestStatus = new UpdateContactRequestStatus(contactRequestRepository);
+  const contactController = new ContactController(createContactRequest, listContactRequests, updateContactRequestStatus);
+  app.use(buildContactRoutes(contactController, authMiddleware));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

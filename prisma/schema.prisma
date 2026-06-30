@@ -394,6 +394,21 @@ model WhatsAppMessage {
   createdAt DateTime                 @default(now())
 }
 
+model ContactRequest {
+  id        String               @id @default(uuid())
+  phone     String
+  email     String
+  message   String
+  status    ContactRequestStatus @default(new)
+  createdAt DateTime             @default(now())
+}
+
+enum ContactRequestStatus {
+  new
+  read
+  archived
+}
+
 model WhatsAppLog {
   id         String         @id @default(uuid())
   configId   String
