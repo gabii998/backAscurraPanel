@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build Docker Image
 
 on:
   push:
@@ -12,7 +12,7 @@ env:
 
 jobs:
   build-and-push-docker:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write # Necesario para escribir en GHCR
@@ -39,7 +39,6 @@ jobs:
             type=semver,pattern={{version}}
             type=ref,event=branch
             type=ref,event=pr
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
