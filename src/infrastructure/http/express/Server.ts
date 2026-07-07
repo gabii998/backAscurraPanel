@@ -165,13 +165,13 @@ export const buildServer = (): Express => {
     env.corsAllowedOrigins.length > 0
       ? {
           origin: env.corsAllowedOrigins,
-          methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+          methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
           allowedHeaders: ["Authorization", "Content-Type", "x-api-key"],
           optionsSuccessStatus: 204,
         }
       : {
           origin: true,
-          methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+          methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
           allowedHeaders: ["Authorization", "Content-Type", "x-api-key"],
           optionsSuccessStatus: 204,
         };
