@@ -333,14 +333,18 @@ model ArcaLog {
 }
 
 model MercadoPagoConfig {
-  id          String           @id @default(uuid())
-  name        String           @unique
-  accessToken String
-  publicKey   String
-  apiKeyId    String?
-  logs        MercadoPagoLog[]
-  updatedAt   DateTime         @updatedAt
-  createdAt   DateTime         @default(now())
+  id             String           @id @default(uuid())
+  name           String           @unique
+  accessToken    String
+  publicKey      String
+  webhookUrl     String           @default("")
+  backUrlSuccess String           @default("")
+  backUrlFailure String           @default("")
+  backUrlPending String           @default("")
+  apiKeyId       String?
+  logs           MercadoPagoLog[]
+  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime         @default(now())
 }
 
 model MercadoPagoLog {
@@ -350,7 +354,6 @@ model MercadoPagoLog {
   externalReference String            @default("")
   preferenceId      String            @default("")
   paymentId         String            @default("")
-  webhookUrl        String            @default("")
   checkoutUrl       String            @default("")
   status            String            @default("pending")
   amount            Float             @default(0)

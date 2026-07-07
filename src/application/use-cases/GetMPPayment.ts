@@ -13,11 +13,10 @@ export interface GetMPPaymentOutput {
 export class GetMPPayment {
   constructor(private configRepo: MercadoPagoConfigRepository) {}
 
-  async execute(configName: string, paymentId: string): Promise<GetMPPaymentOutput> {
-    if (!configName) throw new Error("MISSING_CONFIG");
-    if (!paymentId)  throw new Error("MISSING_PAYMENT_ID");
+  async execute(apiKeyId: string, paymentId: string): Promise<GetMPPaymentOutput> {
+    if (!paymentId) throw new Error("MISSING_PAYMENT_ID");
 
-    const config = await this.configRepo.getByName(configName);
+    const config = await this.configRepo.getByApiKeyId(apiKeyId);
     if (!config) throw new Error("CONFIG_NOT_FOUND");
 
     const client = new MercadoPagoClient(config.accessToken);

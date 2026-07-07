@@ -15,6 +15,10 @@ export class PrismaMercadoPagoConfigRepository implements MercadoPagoConfigRepos
     return prisma.mercadoPagoConfig.findUnique({ where: { name } });
   }
 
+  async getByApiKeyId(apiKeyId: string): Promise<MercadoPagoConfig | null> {
+    return prisma.mercadoPagoConfig.findFirst({ where: { apiKeyId } });
+  }
+
   async create(data: MercadoPagoConfigInput): Promise<MercadoPagoConfig> {
     return prisma.mercadoPagoConfig.create({ data });
   }

@@ -23,16 +23,14 @@ export class MPController {
 
   // ── Public (API key) ──────────────────────────────────
   handleCreatePreference = async (req: Request, res: Response): Promise<void> => {
-    const { config, items, external_reference, webhook_url, back_url } = req.body as Record<string, unknown>;
+    const { items, external_reference } = req.body as Record<string, unknown>;
     const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
 
     try {
       const result = await this.createMPPreference.execute({
-        config:            typeof config === "string" ? config : "",
+        apiKeyId,
         items:             Array.isArray(items) ? items as never : [],
         externalReference: typeof external_reference === "string" ? external_reference : undefined,
-        webhookUrl:        typeof webhook_url === "string" ? webhook_url : undefined,
-        backUrl:           typeof back_url === "string" ? back_url : undefined,
       });
       res.status(201).json(result);
     } catch (err) {
@@ -47,14 +45,13 @@ export class MPController {
 
   handleGetPayment = async (req: Request, res: Response): Promise<void> => {
     const { paymentId } = req.params;
-    const config = typeof req.query["config"] === "string" ? req.query["config"] : "";
+    const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
 
     try {
-      const result = await this.getMPPayment.execute(config, paymentId);
+      const result = await this.getMPPayment.execute(apiKeyId, paymentId);
       res.json(result);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
-      if (err.message === "MISSING_CONFIG")     { res.status(400).json({ message: err.message }); return; }
       if (err.message === "MISSING_PAYMENT_ID") { res.status(400).json({ message: err.message }); return; }
       if (err.message === "CONFIG_NOT_FOUND")   { res.status(404).json({ message: err.message }); return; }
       if (err.message === "PAYMENT_NOT_FOUND")  { res.status(404).json({ message: err.message }); return; }
@@ -91,12 +88,16 @@ export class MPController {
   };
 
   handleCreateConfig = async (req: Request, res: Response): Promise<void> => {
-    const { name, accessToken, publicKey } = req.body as Record<string, unknown>;
+    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.createMPConfig.execute({
-        name:        typeof name === "string" ? name : "",
-        accessToken: typeof accessToken === "string" ? accessToken : "",
-        publicKey:   typeof publicKey === "string" ? publicKey : "",
+        name:          typeof name === "string" ? name : "",
+        accessToken:   typeof accessToken === "string" ? accessToken : "",
+        publicKey:     typeof publicKey === "string" ? publicKey : "",
+        webhookUrl:    typeof webhookUrl === "string" ? webhookUrl : "",
+        backUrlSuccess: typeof backUrlSuccess === "string" ? backUrlSuccess : "",
+        backUrlFailure: typeof backUrlFailure === "string" ? backUrlFailure : "",
+        backUrlPending: typeof backUrlPending === "string" ? backUrlPending : "",
       });
       res.status(201).json(cfg);
     } catch (err) {
@@ -109,12 +110,16 @@ export class MPController {
 
   handleUpdateConfig = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, accessToken, publicKey } = req.body as Record<string, unknown>;
+    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.updateMPConfig.execute(id, {
         ...(typeof name === "string" && { name }),
         ...(typeof accessToken === "string" && accessToken && { accessToken }),
         ...(typeof publicKey === "string" && { publicKey }),
+        ...(typeof webhookUrl === "string" && { webhookUrl }),
+        ...(typeof backUrlSuccess === "string" && { backUrlSuccess }),
+        ...(typeof backUrlFailure === "string" && { backUrlFailure }),
+        ...(typeof backUrlPending === "string" && { backUrlPending }),
       });
       res.json(cfg);
     } catch (err) {

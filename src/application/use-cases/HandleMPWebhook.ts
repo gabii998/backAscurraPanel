@@ -40,9 +40,9 @@ export class HandleMPWebhook {
     if (log) {
       await this.logRepo.updateStatus(log.id, status, paymentId, amount);
 
-      if (log.webhookUrl) {
+      if (config.webhookUrl) {
         try {
-          await fetch(log.webhookUrl, {
+          await fetch(config.webhookUrl, {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
             body:    JSON.stringify({

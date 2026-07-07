@@ -4,7 +4,6 @@ export interface MercadoPagoLog {
   externalReference: string;
   preferenceId: string;
   paymentId: string;
-  webhookUrl: string;
   checkoutUrl: string;
   status: string;
   amount: number;

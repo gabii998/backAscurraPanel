@@ -12,11 +12,9 @@ export interface MPItem {
 }
 
 export interface CreateMPPreferenceInput {
-  config: string;
+  apiKeyId: string;
   items: MPItem[];
   externalReference?: string;
-  webhookUrl?: string;
-  backUrl?: string;
 }
 
 export interface CreateMPPreferenceOutput {
@@ -32,10 +30,9 @@ export class CreateMPPreference {
   ) {}
 
   async execute(input: CreateMPPreferenceInput): Promise<CreateMPPreferenceOutput> {
-    if (!input.config) throw new Error("MISSING_CONFIG");
     if (!input.items?.length) throw new Error("MISSING_ITEMS");
 
-    const config = await this.configRepo.getByName(input.config);
+    const config = await this.configRepo.getByApiKeyId(input.apiKeyId);
     if (!config) throw new Error("CONFIG_NOT_FOUND");
 
     const client = new MercadoPagoClient(config.accessToken);
@@ -53,11 +50,11 @@ export class CreateMPPreference {
         })),
         external_reference: input.externalReference ?? "",
         notification_url:   notificationUrl,
-        ...(input.backUrl && {
+        ...((config.backUrlSuccess || config.backUrlFailure || config.backUrlPending) && {
           back_urls: {
-            success: input.backUrl,
-            failure: input.backUrl,
-            pending: input.backUrl,
+            success: config.backUrlSuccess || undefined,
+            failure: config.backUrlFailure || undefined,
+            pending: config.backUrlPending || undefined,
           },
           auto_return: "approved" as const,
         }),
@@ -68,7 +65,6 @@ export class CreateMPPreference {
         externalReference: input.externalReference ?? "",
         preferenceId:      "",
         paymentId:         "",
-        webhookUrl:        input.webhookUrl ?? "",
         checkoutUrl:       "",
         status:            "error",
         amount:            0,
@@ -86,7 +82,6 @@ export class CreateMPPreference {
       externalReference: input.externalReference ?? "",
       preferenceId:      preference.id ?? "",
       paymentId:         "",
-      webhookUrl:        input.webhookUrl ?? "",
       checkoutUrl,
       status:            "pending",
       amount:            0,
