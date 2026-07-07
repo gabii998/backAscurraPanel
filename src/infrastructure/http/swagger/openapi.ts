@@ -1982,8 +1982,12 @@ export const openApiSpec = {
         tags: ["arca"],
         summary: "Obtener puntos de venta habilitados (API key)",
         security: [{ apiKey: [] }],
+        parameters: [
+          { name: "cuit", in: "query", required: true, schema: { type: "string" }, description: "CUIT del contribuyente a consultar (11 dígitos, sin guiones)" },
+        ],
         responses: {
           "200": { description: "OK", content: { "application/json": { schema: { type: "object" } } } },
+          "400": { description: "CUIT no proporcionado", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "401": { description: "API key inválida" },
           "403": { description: "API key sin configuración ARCA asociada", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
           "502": { description: "Error en ARCA/AFIP", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },

@@ -8,11 +8,11 @@ export class GetArcaSalesPoints {
     private logRepo:    ArcaLogRepository,
   ) {}
 
-  async execute(apiKeyId: string): Promise<unknown> {
+  async execute(apiKeyId: string, cuit: string): Promise<unknown> {
     const config = await this.configRepo.getByApiKeyId(apiKeyId);
     if (!config) throw new Error("ARCA_NOT_CONFIGURED");
 
-    const service = new ArcaService({ ...config, configId: config.id });
+    const service = new ArcaService({ ...config, cuit, configId: config.id });
     const start   = Date.now();
     let response: unknown;
     let status = "ok";

@@ -131,8 +131,10 @@ export class ArcaController {
 
   handleGetSalesPoints = async (req: Request, res: Response): Promise<void> => {
     const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
+    const cuit = (req.query["cuit"] as string | undefined)?.trim() ?? "";
+    if (!cuit) { res.status(400).json({ message: "CUIT_REQUIRED" }); return; }
     try {
-      const result = await this.getArcaSalesPoints.execute(apiKeyId);
+      const result = await this.getArcaSalesPoints.execute(apiKeyId, cuit);
       res.json(result);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
