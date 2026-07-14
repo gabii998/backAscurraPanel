@@ -130,8 +130,10 @@ import { CreateArcaVoucher } from "../../../application/use-cases/CreateArcaVouc
 import { GetArcaSalesPoints } from "../../../application/use-cases/GetArcaSalesPoints";
 import { GetArcaTaxpayer } from "../../../application/use-cases/GetArcaTaxpayer";
 import { ListArcaLogs } from "../../../application/use-cases/ListArcaLogs";
+import { NotifyArcaCertExpiry } from "../../../application/use-cases/NotifyArcaCertExpiry";
 import { PrismaArcaConfigRepository } from "../../repositories/PrismaArcaConfigRepository";
 import { PrismaArcaLogRepository } from "../../repositories/PrismaArcaLogRepository";
+import { EncryptionService } from "../../services/EncryptionService";
 import { ArcaController } from "../../../interfaces/http/controllers/ArcaController";
 import { buildArcaRoutes } from "./routes/arcaRoutes";
 import { CreateWhatsAppConfig } from "../../../application/use-cases/CreateWhatsAppConfig";
@@ -199,7 +201,8 @@ export const buildServer = (): Express => {
   const mailLogRepository         = new PrismaMailLogRepository();
   const mpConfigRepository        = new PrismaMercadoPagoConfigRepository();
   const mpLogRepository           = new PrismaMercadoPagoLogRepository();
-  const arcaConfigRepository      = new PrismaArcaConfigRepository();
+  const encryptionService         = new EncryptionService(env.arcaEncryptionKey);
+  const arcaConfigRepository      = new PrismaArcaConfigRepository(encryptionService);
   const arcaLogRepository         = new PrismaArcaLogRepository();
   const contactRequestRepository  = new PrismaContactRequestRepository();
 
@@ -330,7 +333,8 @@ export const buildServer = (): Express => {
   const getArcaSalesPoints        = new GetArcaSalesPoints(arcaConfigRepository, arcaLogRepository);
   const getArcaTaxpayer           = new GetArcaTaxpayer(arcaConfigRepository, arcaLogRepository);
   const listArcaLogs              = new ListArcaLogs(arcaLogRepository);
-  const arcaController = new ArcaController(createArcaConfig, updateArcaConfig, deleteArcaConfig, listArcaConfigs, assignApiKeyToArcaConfig, unassignApiKeyFromArcaConfig, createArcaVoucher, getArcaSalesPoints, getArcaTaxpayer, listArcaLogs);
+  const notifyArcaCertExpiry      = new NotifyArcaCertExpiry(arcaConfigRepository, userRepository, notificationRepository);
+  const arcaController = new ArcaController(createArcaConfig, updateArcaConfig, deleteArcaConfig, listArcaConfigs, assignApiKeyToArcaConfig, unassignApiKeyFromArcaConfig, createArcaVoucher, getArcaSalesPoints, getArcaTaxpayer, listArcaLogs, notifyArcaCertExpiry);
 
   // WhatsApp use cases + controller
   const waConfigRepository  = new PrismaWhatsAppConfigRepository();

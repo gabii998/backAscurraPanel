@@ -12,20 +12,30 @@ const mockUser: User = {
   role: "member",
   initials: "A",
   color: "#000",
+  bio: "",
   createdAt: new Date(),
   deletedAt: null,
 };
 
 const makeRepo = (user: User | null = mockUser): UserRepository => ({
-  findById: jest.fn(),
-  findByEmail: jest.fn().mockResolvedValue(user),
-  create: jest.fn(),
+  findById:             jest.fn(),
+  findByEmail:          jest.fn().mockResolvedValue(user),
+  create:               jest.fn(),
+  list:                 jest.fn(),
+  softDelete:           jest.fn(),
+  updateProfile:        jest.fn(),
+  changePassword:       jest.fn(),
+  getNotifications:     jest.fn(),
+  updateNotifications:  jest.fn(),
+  setResetToken:        jest.fn(),
+  findByResetToken:     jest.fn(),
+  clearResetToken:      jest.fn(),
 });
 
 describe("LoginUser", () => {
   it("returns user and token on valid credentials", async () => {
     const hasher: PasswordHasher = { hash: jest.fn(), compare: jest.fn().mockReturnValue(true) };
-    const token: TokenService = { generate: jest.fn().mockReturnValue("jwt"), verify: jest.fn() };
+    const token: TokenService = { generate: jest.fn().mockReturnValue({ token: "jwt", jti: "j1", expiresAt: new Date() }), verify: jest.fn() };
 
     const uc = new LoginUser(makeRepo(), hasher, token);
     const result = await uc.execute({ email: "ana@example.com", password: "secret" });

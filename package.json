@@ -15,7 +15,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:erd": "mmdc -i prisma/erd.mmd -o prisma/erd.svg -p puppeteer-config.json",
-    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
+    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts",
+    "scripts:encrypt-arca": "ts-node --project tsconfig.seed.json scripts/encrypt-arca-configs.ts"
   },
   "prisma": {
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"

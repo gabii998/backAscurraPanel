@@ -9,4 +9,5 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
   apiUrl: process.env.API_URL || "http://localhost:3000",
+  arcaEncryptionKey: process.env.ARCA_ENCRYPTION_KEY ?? "",
 };

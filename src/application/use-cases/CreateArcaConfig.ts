@@ -10,6 +10,6 @@ export class CreateArcaConfig {
     }
     const config = await this.configRepo.create(data);
     const { cert: _cert, privateKey: _key, ...pub } = config;
-    return pub;
+    return { ...pub, apiKeys: [] };
   }
 }

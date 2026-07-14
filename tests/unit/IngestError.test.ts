@@ -4,7 +4,7 @@ import type { AppError } from "../../src/domain/entities/AppError";
 
 const baseError: AppError = {
   id: "e1",
-  projectId: null,
+  errorConfigId: null,
   type: "TypeError",
   message: "Cannot read x",
   severity: "error",
@@ -25,15 +25,15 @@ const baseError: AppError = {
 
 const makeRepo = (overrides: Partial<AppErrorRepository> = {}): AppErrorRepository => ({
   findByFingerprint: jest.fn().mockResolvedValue(null),
-  findById: jest.fn().mockResolvedValue(null),
-  list: jest.fn(),
-  create: jest.fn().mockImplementation(async (e: AppError) => e),
-  addOccurrence: jest.fn().mockResolvedValue(undefined),
-  updateCounts: jest.fn().mockResolvedValue(undefined),
-  updateStatus: jest.fn(),
-  softDelete: jest.fn(),
-  getSparkline: jest.fn().mockResolvedValue([0, 0, 0, 0, 0, 0, 1]),
-  isUserKnown: jest.fn().mockResolvedValue(false),
+  findById:          jest.fn().mockResolvedValue(null),
+  list:              jest.fn(),
+  create:            jest.fn().mockImplementation(async (e: AppError) => e),
+  addOccurrence:     jest.fn().mockResolvedValue(undefined),
+  updateCounts:      jest.fn().mockResolvedValue(undefined),
+  updateStatus:      jest.fn(),
+  softDelete:        jest.fn(),
+  getSparkline:      jest.fn().mockResolvedValue([0, 0, 0, 0, 0, 0, 1]),
+  isUserKnown:       jest.fn().mockResolvedValue(false),
   ...overrides,
 });
 

@@ -215,13 +215,14 @@ model Notification {
 }
 
 model ApiKey {
-  id           String        @id @default(uuid())
+  id           String             @id @default(uuid())
   name         String
-  keyHash      String        @unique
+  keyHash      String             @unique
   prefix       String
-  createdAt    DateTime      @default(now())
+  createdAt    DateTime           @default(now())
   revokedAt    DateTime?
   errorConfigs ErrorConfig[]
+  arcaConfigs  ArcaConfigApiKey[]
 }
 
 model ErrorConfig {
@@ -305,31 +306,46 @@ model MailLog {
 }
 
 model ArcaConfig {
-  id         String    @id @default(uuid())
-  name       String    @unique
-  cuit       String
-  cert       String
-  privateKey String
-  production Boolean   @default(false)
-  apiKeyId   String?
-  logs       ArcaLog[]
-  updatedAt  DateTime  @updatedAt
-  createdAt  DateTime  @default(now())
+  id                   String             @id @default(uuid())
+  name                 String             @unique
+  cuit                 String
+  cert                 String
+  privateKey           String
+  production           Boolean            @default(false)
+  certExpiryNotifiedAt DateTime?
+  apiKeys              ArcaConfigApiKey[]
+  logs                 ArcaLog[]
+  updatedAt            DateTime           @updatedAt
+  createdAt            DateTime           @default(now())
+}
+
+model ArcaConfigApiKey {
+  id        String     @id @default(uuid())
+  configId  String
+  apiKeyId  String     @unique
+  config    ArcaConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  apiKey    ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@index([configId])
 }
 
 model ArcaLog {
-  id         String     @id @default(uuid())
-  configId   String
-  config     ArcaConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
-  service    String
-  method     String
-  request    String
-  response   String
-  status     String     @default("ok")
-  error      String     @default("")
-  durationMs Int        @default(0)
-  updatedAt  DateTime   @updatedAt
-  createdAt  DateTime   @default(now())
+  id             String     @id @default(uuid())
+  configId       String
+  config         ArcaConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  service        String
+  method         String
+  request        String
+  response       String
+  status         String     @default("ok")
+  error          String     @default("")
+  durationMs     Int        @default(0)
+  idempotencyKey String?    @unique
+  updatedAt      DateTime   @updatedAt
+  createdAt      DateTime   @default(now())
+
+  @@index([configId, createdAt(sort: Desc)])
 }
 
 model MercadoPagoConfig {

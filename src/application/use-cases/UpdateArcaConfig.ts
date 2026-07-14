@@ -8,12 +8,13 @@ export class UpdateArcaConfig {
     const existing = await this.configRepo.getById(id);
     if (!existing) throw new Error("ARCA_CONFIG_NOT_FOUND");
 
-    const patch: Partial<ArcaConfigInput> = { ...data };
+    const patch: Partial<ArcaConfigInput> & { certExpiryNotifiedAt?: null } = { ...data };
     if (!patch.cert) delete patch.cert;
     if (!patch.privateKey) delete patch.privateKey;
+    if (patch.cert) patch.certExpiryNotifiedAt = null;
 
     const config = await this.configRepo.update(id, patch);
     const { cert: _cert, privateKey: _key, ...pub } = config;
-    return pub;
+    return { ...pub, apiKeys: [] };
   }
 }

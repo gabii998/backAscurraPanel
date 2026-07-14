@@ -8,6 +8,7 @@ export interface ArcaLog {
   status: string;
   error: string;
   durationMs: number;
+  idempotencyKey: string | null;
   updatedAt: Date;
   createdAt: Date;
 }

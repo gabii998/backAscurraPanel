@@ -9,6 +9,7 @@ import type { CreateArcaVoucher } from "../../../application/use-cases/CreateArc
 import type { GetArcaSalesPoints } from "../../../application/use-cases/GetArcaSalesPoints";
 import type { GetArcaTaxpayer } from "../../../application/use-cases/GetArcaTaxpayer";
 import type { ListArcaLogs } from "../../../application/use-cases/ListArcaLogs";
+import type { NotifyArcaCertExpiry } from "../../../application/use-cases/NotifyArcaCertExpiry";
 import type { ApiKeyRequest } from "../../../infrastructure/http/express/middleware/ingestKeyMiddleware";
 
 export class ArcaController {
@@ -23,6 +24,7 @@ export class ArcaController {
     private getArcaSalesPoints:        GetArcaSalesPoints,
     private getArcaTaxpayer:           GetArcaTaxpayer,
     private listArcaLogs:              ListArcaLogs,
+    private notifyArcaCertExpiry:      NotifyArcaCertExpiry,
   ) {}
 
   // ── Configs (JWT + admin) ─────────────────────────────
@@ -30,6 +32,9 @@ export class ArcaController {
   handleListConfigs = async (_req: Request, res: Response): Promise<void> => {
     const configs = await this.listArcaConfigs.execute();
     res.json(configs);
+    this.notifyArcaCertExpiry.execute().catch((err) =>
+      console.error("[ArcaCertExpiry] Notification check failed:", err)
+    );
   };
 
   handleCreateConfig = async (req: Request, res: Response): Promise<void> => {
@@ -108,23 +113,40 @@ export class ArcaController {
 
   handleListLogs = async (req: Request, res: Response): Promise<void> => {
     const { configId } = req.params;
-    const limit = typeof req.query["limit"] === "string" ? parseInt(req.query["limit"], 10) : undefined;
-    const logs = await this.listArcaLogs.execute(configId, limit);
-    res.json(logs);
+    const page  = typeof req.query["page"]  === "string" ? Math.max(1, parseInt(req.query["page"],  10) || 1) : 1;
+    const limit = typeof req.query["limit"] === "string" ? Math.min(200, parseInt(req.query["limit"], 10) || 50) : 50;
+    const result = await this.listArcaLogs.execute(configId, page, limit);
+    res.json(result);
   };
 
   // ── Operations (ingestKey) ────────────────────────────
 
   handleCreateVoucher = async (req: Request, res: Response): Promise<void> => {
     const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
-    const { voucher } = req.body as Record<string, unknown>;
+    const { voucher, idempotencyKey } = req.body as Record<string, unknown>;
+    if (!idempotencyKey || typeof idempotencyKey !== "string") {
+      res.status(400).json({ message: "IDEMPOTENCY_KEY_REQUIRED" });
+      return;
+    }
     try {
-      const result = await this.createArcaVoucher.execute(apiKeyId, voucher);
-      res.status(201).json(result);
+      const { response, replayed } = await this.createArcaVoucher.execute(apiKeyId, voucher, idempotencyKey);
+      if (replayed) {
+        res.setHeader("Idempotency-Replayed", "true");
+        res.status(200).json(response);
+      } else {
+        res.status(201).json(response);
+      }
     } catch (err) {
       if (!(err instanceof Error)) throw err;
-      if (err.message === "ARCA_NOT_CONFIGURED") { res.status(403).json({ message: err.message }); return; }
-      if (err.message === "ARCA_VOUCHER_FAILED")  { res.status(502).json({ message: err.message }); return; }
+      if (err.message === "ARCA_NOT_CONFIGURED")               { res.status(403).json({ message: err.message }); return; }
+      if (err.message === "ARCA_VOUCHER_FAILED")               {
+        res.status(502).json({ message: err.message, detail: (err as Error & { detail?: string }).detail ?? "" });
+        return;
+      }
+      if (err.message === "VOUCHER_MISSING_FIELDS")            { res.status(400).json({ message: err.message }); return; }
+      if (err.message === "VOUCHER_INVALID_DATE")              { res.status(400).json({ message: err.message }); return; }
+      if (err.message === "VOUCHER_MISSING_IVA")               { res.status(400).json({ message: err.message }); return; }
+      if (err.message === "VOUCHER_MISSING_COMPROBANTES_ASOC") { res.status(400).json({ message: err.message }); return; }
       throw err;
     }
   };

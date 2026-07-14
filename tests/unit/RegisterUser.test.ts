@@ -4,9 +4,18 @@ import type { PasswordHasher } from "../../src/application/services/PasswordHash
 import type { TokenService } from "../../src/application/services/TokenService";
 
 const makeRepo = (overrides: Partial<UserRepository> = {}): UserRepository => ({
-  findById: jest.fn().mockResolvedValue(null),
-  findByEmail: jest.fn().mockResolvedValue(null),
-  create: jest.fn().mockImplementation(async (u) => u),
+  findById:             jest.fn().mockResolvedValue(null),
+  findByEmail:          jest.fn().mockResolvedValue(null),
+  create:               jest.fn().mockImplementation(async (u) => u),
+  list:                 jest.fn().mockResolvedValue([]),
+  softDelete:           jest.fn().mockResolvedValue(undefined),
+  updateProfile:        jest.fn(),
+  changePassword:       jest.fn(),
+  getNotifications:     jest.fn(),
+  updateNotifications:  jest.fn(),
+  setResetToken:        jest.fn(),
+  findByResetToken:     jest.fn(),
+  clearResetToken:      jest.fn(),
   ...overrides,
 });
 
@@ -16,7 +25,7 @@ const makeHasher = (): PasswordHasher => ({
 });
 
 const makeToken = (): TokenService => ({
-  generate: jest.fn().mockReturnValue("token123"),
+  generate: jest.fn().mockReturnValue({ token: "token123", jti: "j1", expiresAt: new Date() }),
   verify: jest.fn(),
 });
 

@@ -5,7 +5,7 @@ import { ArcaService } from "../../infrastructure/services/ArcaService";
 export class GetArcaSalesPoints {
   constructor(
     private configRepo: ArcaConfigRepository,
-    private logRepo:    ArcaLogRepository,
+    private logRepo: ArcaLogRepository,
   ) {}
 
   async execute(apiKeyId: string, cuit: string): Promise<unknown> {
@@ -13,30 +13,38 @@ export class GetArcaSalesPoints {
     if (!config) throw new Error("ARCA_NOT_CONFIGURED");
 
     const service = new ArcaService({ ...config, cuit, configId: config.id });
-    const start   = Date.now();
+    const start = Date.now();
     let response: unknown;
     let status = "ok";
-    let error  = "";
+    let error = "";
 
     try {
       response = await service.billing.getSalesPoints();
     } catch (err) {
-      status   = "error";
-      error    = err instanceof Error ? err.message : String(err);
+      status = "error";
+      error = err instanceof Error ? err.message : String(err);
       response = { error };
-      await this.logRepo.create({
-        configId: config.id, service: "wsfe", method: "getSalesPoints",
-        request: "{}", response: JSON.stringify(response),
-        status, error, durationMs: Date.now() - start,
-      });
+      try {
+        await this.logRepo.create({
+          configId: config.id, service: "wsfe", method: "getSalesPoints",
+          request: JSON.stringify({ cuit }), response: JSON.stringify(response),
+          status, error, durationMs: Date.now() - start, idempotencyKey: null,
+        });
+      } catch (logErr) {
+        console.error("[ArcaLog] Failed to write error log:", logErr);
+      }
       throw new Error("ARCA_REQUEST_FAILED");
     }
 
-    await this.logRepo.create({
-      configId: config.id, service: "wsfe", method: "getSalesPoints",
-      request: "{}", response: JSON.stringify(response),
-      status, error, durationMs: Date.now() - start,
-    });
+    try {
+      await this.logRepo.create({
+        configId: config.id, service: "wsfe", method: "getSalesPoints",
+        request: JSON.stringify({ cuit }), response: JSON.stringify(response),
+        status, error, durationMs: Date.now() - start, idempotencyKey: null,
+      });
+    } catch (logErr) {
+      console.error("[ArcaLog] Failed to write success log:", logErr);
+    }
 
     return response;
   }

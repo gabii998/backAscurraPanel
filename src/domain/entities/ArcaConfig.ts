@@ -1,3 +1,8 @@
+export interface ArcaApiKeyRef {
+  id: string;
+  name: string;
+}
+
 export interface ArcaConfig {
   id: string;
   name: string;
@@ -5,11 +10,14 @@ export interface ArcaConfig {
   cert: string;
   privateKey: string;
   production: boolean;
-  apiKeyId: string | null;
+  certExpiresAt: Date | null;
+  certExpiryNotifiedAt: Date | null;
   updatedAt: Date;
   createdAt: Date;
 }
 
-export type ArcaConfigInput = Omit<ArcaConfig, "id" | "updatedAt" | "createdAt" | "apiKeyId"> & { apiKeyId?: string | null };
+export type ArcaConfigInput = Omit<ArcaConfig, "id" | "updatedAt" | "createdAt" | "certExpiresAt" | "certExpiryNotifiedAt">;
 
-export type ArcaConfigPublic = Omit<ArcaConfig, "cert" | "privateKey">;
+export type ArcaConfigPublic = Omit<ArcaConfig, "cert" | "privateKey" | "certExpiryNotifiedAt"> & {
+  apiKeys: ArcaApiKeyRef[];
+};
