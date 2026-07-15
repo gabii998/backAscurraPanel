@@ -25,6 +25,7 @@ export const buildArcaRoutes = (
 
   // Operations — API key
   router.post("/arca/wsfe/voucher",          ingestKeyMiddleware, wrapRequestHandler(controller.handleCreateVoucher.bind(controller)));
+  router.post("/arca/wsfe/voucher/pdf",      ingestKeyMiddleware, wrapRequestHandler(controller.handleGenerateVoucherPdf.bind(controller)));
   router.get("/arca/wsfe/sales-points",      ingestKeyMiddleware, wrapRequestHandler(controller.handleGetSalesPoints.bind(controller)));
   router.get("/arca/padron/:identifier",     ingestKeyMiddleware, wrapRequestHandler(controller.handleGetTaxpayer.bind(controller)));
 

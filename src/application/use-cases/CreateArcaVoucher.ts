@@ -4,7 +4,7 @@ import { ArcaService } from "../../infrastructure/services/ArcaService";
 
 const REQUIRED_FIELDS = [
   "CantReg", "PtoVta", "CbteTipo", "Concepto", "DocTipo", "DocNro",
-  "CbteDesde", "CbteHasta", "CbteFch", "ImpTotal", "ImpTotConc",
+  "CbteFch", "ImpTotal", "ImpTotConc",
   "ImpNeto", "ImpOpEx", "ImpIVA", "ImpTrib", "MonId", "MonCotiz",
   "CondicionIVAReceptorId",
 ] as const;

@@ -10,6 +10,7 @@ import type { GetArcaSalesPoints } from "../../../application/use-cases/GetArcaS
 import type { GetArcaTaxpayer } from "../../../application/use-cases/GetArcaTaxpayer";
 import type { ListArcaLogs } from "../../../application/use-cases/ListArcaLogs";
 import type { NotifyArcaCertExpiry } from "../../../application/use-cases/NotifyArcaCertExpiry";
+import type { GenerateVoucherPdf } from "../../../application/use-cases/GenerateVoucherPdf";
 import type { ApiKeyRequest } from "../../../infrastructure/http/express/middleware/ingestKeyMiddleware";
 
 export class ArcaController {
@@ -25,6 +26,7 @@ export class ArcaController {
     private getArcaTaxpayer:           GetArcaTaxpayer,
     private listArcaLogs:              ListArcaLogs,
     private notifyArcaCertExpiry:      NotifyArcaCertExpiry,
+    private generateVoucherPdf:        GenerateVoucherPdf,
   ) {}
 
   // ── Configs (JWT + admin) ─────────────────────────────
@@ -162,6 +164,39 @@ export class ArcaController {
       if (!(err instanceof Error)) throw err;
       if (err.message === "ARCA_NOT_CONFIGURED")  { res.status(403).json({ message: err.message }); return; }
       if (err.message === "ARCA_REQUEST_FAILED")   { res.status(502).json({ message: err.message }); return; }
+      throw err;
+    }
+  };
+
+  handleGenerateVoucherPdf = async (req: Request, res: Response): Promise<void> => {
+    const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
+    const { idempotencyKey, emisor, receptor, items, options } = req.body as Record<string, unknown>;
+    if (!idempotencyKey || typeof idempotencyKey !== "string") {
+      res.status(400).json({ message: "IDEMPOTENCY_KEY_REQUIRED" }); return;
+    }
+    if (!emisor || typeof emisor !== "object") {
+      res.status(400).json({ message: "EMISOR_REQUIRED" }); return;
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ message: "ITEMS_REQUIRED" }); return;
+    }
+    try {
+      const buffer = await this.generateVoucherPdf.execute({
+        apiKeyId,
+        idempotencyKey,
+        emisor:   emisor                                          as never,
+        receptor: (receptor && typeof receptor === "object" ? receptor : undefined) as never,
+        items:    items                                           as never,
+        options:  options                                         as never,
+      });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="comprobante.pdf"`);
+      res.send(buffer);
+    } catch (err) {
+      if (!(err instanceof Error)) throw err;
+      if (err.message === "ARCA_NOT_CONFIGURED") { res.status(403).json({ message: err.message }); return; }
+      if (err.message === "VOUCHER_NOT_FOUND")   { res.status(404).json({ message: err.message }); return; }
+      if (err.message === "VOUCHER_FAILED")      { res.status(422).json({ message: err.message }); return; }
       throw err;
     }
   };
