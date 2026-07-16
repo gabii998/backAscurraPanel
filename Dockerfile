@@ -26,8 +26,11 @@ FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
+ARG APP_VERSION=unknown
+
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV APP_VERSION=$APP_VERSION
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl \

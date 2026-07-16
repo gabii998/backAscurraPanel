@@ -160,6 +160,7 @@ import { ContactController } from "../../../interfaces/http/controllers/ContactC
 import { buildContactRoutes } from "./routes/contactRoutes";
 import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "../swagger/openapi";
+import { buildHealthResponse } from "./health";
 
 export const buildServer = (): Express => {
   const app = express();
@@ -182,6 +183,10 @@ export const buildServer = (): Express => {
   app.use(cors(corsOptions));
   app.options("*", cors(corsOptions));
   app.use(express.json());
+
+  app.get("/health", (_req, res) => {
+    res.json(buildHealthResponse(env.appVersion));
+  });
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 

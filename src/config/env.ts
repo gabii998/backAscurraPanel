@@ -10,4 +10,5 @@ export const env = {
   corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
   apiUrl: process.env.API_URL || "http://localhost:3000",
   arcaEncryptionKey: process.env.ARCA_ENCRYPTION_KEY ?? "",
+  appVersion: process.env.APP_VERSION || process.env.GITHUB_SHA || "unknown",
 };

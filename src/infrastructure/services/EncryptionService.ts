@@ -7,7 +7,7 @@ export class EncryptionService {
   private readonly key: Buffer;
 
   constructor(hexKey: string) {
-    if (!hexKey || hexKey.length !== 64) {
+    if (!/^[0-9a-fA-F]{64}$/.test(hexKey)) {
       throw new Error("ARCA_ENCRYPTION_KEY must be a 64-char hex string (32 bytes)");
     }
     this.key = Buffer.from(hexKey, "hex");
