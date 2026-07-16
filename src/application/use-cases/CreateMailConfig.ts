@@ -10,6 +10,7 @@ export interface CreateMailConfigInput {
   user: string;
   pass: string;
   from: string;
+  apiKeyId?: string | null;
 }
 
 export class CreateMailConfig {
@@ -19,7 +20,7 @@ export class CreateMailConfig {
     if (!input.name || !input.host || !input.port || !input.user || !input.pass || !input.from) {
       throw new Error("MISSING_FIELDS");
     }
-    const created = await this.repo.create(input);
+    const created = await this.repo.create({ ...input, apiKeyId: input.apiKeyId ?? null });
     const { pass: _pass, ...rest } = created;
     return rest;
   }

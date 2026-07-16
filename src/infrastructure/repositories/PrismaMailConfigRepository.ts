@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma";
-import type { MailConfigRepository, MailConfigInput } from "../../domain/repositories/MailConfigRepository";
-import type { MailConfig } from "../../domain/entities/MailConfig";
+import type { MailConfigRepository } from "../../domain/repositories/MailConfigRepository";
+import type { MailConfig, MailConfigInput } from "../../domain/entities/MailConfig";
 
 export class PrismaMailConfigRepository implements MailConfigRepository {
   async list(): Promise<MailConfig[]> {
@@ -13,6 +13,10 @@ export class PrismaMailConfigRepository implements MailConfigRepository {
 
   async getByName(name: string): Promise<MailConfig | null> {
     return prisma.mailConfig.findUnique({ where: { name } });
+  }
+
+  async getByNameAndApiKeyId(name: string, apiKeyId: string): Promise<MailConfig | null> {
+    return prisma.mailConfig.findFirst({ where: { name, apiKeyId } });
   }
 
   async create(data: MailConfigInput): Promise<MailConfig> {

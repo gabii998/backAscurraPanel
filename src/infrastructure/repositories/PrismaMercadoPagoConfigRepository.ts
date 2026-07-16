@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma";
-import type { MercadoPagoConfigRepository, MercadoPagoConfigInput } from "../../domain/repositories/MercadoPagoConfigRepository";
-import type { MercadoPagoConfig } from "../../domain/entities/MercadoPagoConfig";
+import type { MercadoPagoConfigRepository } from "../../domain/repositories/MercadoPagoConfigRepository";
+import type { MercadoPagoConfig, MercadoPagoConfigInput } from "../../domain/entities/MercadoPagoConfig";
 
 export class PrismaMercadoPagoConfigRepository implements MercadoPagoConfigRepository {
   async list(): Promise<MercadoPagoConfig[]> {

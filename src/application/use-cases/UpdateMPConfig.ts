@@ -6,7 +6,7 @@ export class UpdateMPConfig {
 
   async execute(
     id: string,
-    data: { name?: string; accessToken?: string; publicKey?: string; webhookUrl?: string; backUrlSuccess?: string; backUrlFailure?: string; backUrlPending?: string },
+    data: { name?: string; accessToken?: string; publicKey?: string; webhookUrl?: string; backUrlSuccess?: string; backUrlFailure?: string; backUrlPending?: string; apiKeyId?: string | null },
   ): Promise<Omit<MercadoPagoConfig, "accessToken">> {
     const existing = await this.repo.getById(id);
     if (!existing) throw new Error("CONFIG_NOT_FOUND");

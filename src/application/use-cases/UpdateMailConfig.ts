@@ -10,6 +10,7 @@ export interface UpdateMailConfigInput {
   user?: string;
   pass?: string;
   from?: string;
+  apiKeyId?: string | null;
 }
 
 export class UpdateMailConfig {
@@ -25,6 +26,7 @@ export class UpdateMailConfig {
     if (input.port !== undefined) data.port = input.port;
     if (input.user !== undefined) data.user = input.user;
     if (input.from !== undefined) data.from = input.from;
+    if (input.apiKeyId !== undefined) data.apiKeyId = input.apiKeyId;
     if (input.pass)               data.pass = input.pass;  // only update pass if provided
 
     const updated = await this.repo.update(id, data);

@@ -88,7 +88,7 @@ export class MPController {
   };
 
   handleCreateConfig = async (req: Request, res: Response): Promise<void> => {
-    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending } = req.body as Record<string, unknown>;
+    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending, apiKeyId } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.createMPConfig.execute({
         name:          typeof name === "string" ? name : "",
@@ -98,6 +98,7 @@ export class MPController {
         backUrlSuccess: typeof backUrlSuccess === "string" ? backUrlSuccess : "",
         backUrlFailure: typeof backUrlFailure === "string" ? backUrlFailure : "",
         backUrlPending: typeof backUrlPending === "string" ? backUrlPending : "",
+        apiKeyId:       typeof apiKeyId === "string" && apiKeyId ? apiKeyId : null,
       });
       res.status(201).json(cfg);
     } catch (err) {
@@ -110,7 +111,7 @@ export class MPController {
 
   handleUpdateConfig = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending } = req.body as Record<string, unknown>;
+    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending, apiKeyId } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.updateMPConfig.execute(id, {
         ...(typeof name === "string" && { name }),
@@ -120,6 +121,7 @@ export class MPController {
         ...(typeof backUrlSuccess === "string" && { backUrlSuccess }),
         ...(typeof backUrlFailure === "string" && { backUrlFailure }),
         ...(typeof backUrlPending === "string" && { backUrlPending }),
+        ...(apiKeyId !== undefined && { apiKeyId: typeof apiKeyId === "string" && apiKeyId ? apiKeyId : null }),
       });
       res.json(cfg);
     } catch (err) {

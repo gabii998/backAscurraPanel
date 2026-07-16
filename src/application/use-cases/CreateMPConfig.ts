@@ -12,6 +12,7 @@ export class CreateMPConfig {
     backUrlSuccess?: string;
     backUrlFailure?: string;
     backUrlPending?: string;
+    apiKeyId?: string | null;
   }): Promise<Omit<MercadoPagoConfig, "accessToken">> {
     if (!data.name || !data.accessToken || !data.publicKey) throw new Error("MISSING_FIELDS");
     const cfg = await this.repo.create({
@@ -20,6 +21,7 @@ export class CreateMPConfig {
       backUrlSuccess: data.backUrlSuccess ?? "",
       backUrlFailure: data.backUrlFailure ?? "",
       backUrlPending: data.backUrlPending ?? "",
+      apiKeyId:        data.apiKeyId ?? null,
     });
     const { accessToken: _, ...rest } = cfg;
     return rest;

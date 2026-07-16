@@ -1,6 +1,4 @@
-import type { MercadoPagoConfig } from "../entities/MercadoPagoConfig";
-
-export type MercadoPagoConfigInput = Omit<MercadoPagoConfig, "id" | "updatedAt" | "createdAt">;
+import type { MercadoPagoConfig, MercadoPagoConfigInput } from "../entities/MercadoPagoConfig";
 
 export interface MercadoPagoConfigRepository {
   list(): Promise<MercadoPagoConfig[]>;

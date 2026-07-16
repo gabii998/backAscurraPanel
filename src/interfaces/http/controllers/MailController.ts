@@ -32,6 +32,7 @@ export class MailController {
 
     try {
       const result = await this.sendMail.execute({
+        apiKeyId,
         config:   typeof config === "string" ? config : "",
         to:       typeof to === "string" ? to : "",
         template: typeof template === "string" ? template : undefined,
@@ -59,7 +60,7 @@ export class MailController {
   };
 
   handleCreateConfig = async (req: Request, res: Response): Promise<void> => {
-    const { name, host, port, user, pass, from } = req.body as Record<string, unknown>;
+    const { name, host, port, user, pass, from, apiKeyId } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.createMailConfig.execute({
         name: typeof name === "string" ? name : "",
@@ -68,6 +69,7 @@ export class MailController {
         user: typeof user === "string" ? user : "",
         pass: typeof pass === "string" ? pass : "",
         from: typeof from === "string" ? from : "",
+        apiKeyId: typeof apiKeyId === "string" && apiKeyId ? apiKeyId : null,
       });
       res.status(201).json(cfg);
     } catch (err) {
@@ -80,7 +82,7 @@ export class MailController {
 
   handleUpdateConfig = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, host, port, user, pass, from } = req.body as Record<string, unknown>;
+    const { name, host, port, user, pass, from, apiKeyId } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.updateMailConfig.execute(id, {
         ...(typeof name === "string" && { name }),
@@ -89,6 +91,7 @@ export class MailController {
         ...(typeof user === "string" && { user }),
         ...(typeof pass === "string" && pass && { pass }),
         ...(typeof from === "string" && { from }),
+        ...(apiKeyId !== undefined && { apiKeyId: typeof apiKeyId === "string" && apiKeyId ? apiKeyId : null }),
       });
       res.json(cfg);
     } catch (err) {

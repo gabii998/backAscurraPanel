@@ -5,6 +5,7 @@ import type { MailSender } from "../services/MailSender";
 import { NodemailerMailSender } from "../../infrastructure/services/NodemailerMailSender";
 
 export interface SendMailInput {
+  apiKeyId: string;
   config: string;       // nombre de la MailConfig a usar
   to: string;
   template?: string;
@@ -27,7 +28,7 @@ export class SendMail {
   async execute(input: SendMailInput): Promise<{ messageId: string }> {
     if (!input.config) throw new Error("MISSING_CONFIG");
 
-    const config = await this.configRepo.getByName(input.config);
+    const config = await this.configRepo.getByNameAndApiKeyId(input.config, input.apiKeyId);
     if (!config) throw new Error("CONFIG_NOT_FOUND");
 
     let resolvedSubject: string;
