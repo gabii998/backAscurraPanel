@@ -13,11 +13,10 @@ export const buildErrorRoutes = (
 
   router.post("/errors/ingest", buildIngestKeyMiddleware(apiKeyRepository), wrapRequestHandler(controller.handleIngest.bind(controller)));
 
-  router.use(authMiddleware);
-  router.get("/errors",            wrapRequestHandler(controller.handleList.bind(controller)));
-  router.get("/errors/:id",        wrapRequestHandler(controller.handleGet.bind(controller)));
-  router.put("/errors/:id/status", wrapRequestHandler(controller.handleUpdateStatus.bind(controller)));
-  router.delete("/errors/:id",     wrapRequestHandler(controller.handleDelete.bind(controller)));
+  router.get("/errors",            authMiddleware, wrapRequestHandler(controller.handleList.bind(controller)));
+  router.get("/errors/:id",        authMiddleware, wrapRequestHandler(controller.handleGet.bind(controller)));
+  router.put("/errors/:id/status", authMiddleware, wrapRequestHandler(controller.handleUpdateStatus.bind(controller)));
+  router.delete("/errors/:id",     authMiddleware, wrapRequestHandler(controller.handleDelete.bind(controller)));
 
   return router;
 };

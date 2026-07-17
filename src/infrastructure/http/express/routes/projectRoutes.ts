@@ -10,16 +10,14 @@ export const buildProjectRoutes = (
 ): Router => {
   const router = Router();
 
-  router.use(authMiddleware);
+  router.get("/projects", authMiddleware, wrapRequestHandler(projectController.handleList.bind(projectController)));
+  router.post("/projects", authMiddleware, wrapRequestHandler(projectController.handleCreate.bind(projectController)));
+  router.get("/projects/:id", authMiddleware, wrapRequestHandler(projectController.handleGet.bind(projectController)));
+  router.put("/projects/:id", authMiddleware, wrapRequestHandler(projectController.handleUpdate.bind(projectController)));
+  router.delete("/projects/:id", authMiddleware, wrapRequestHandler(projectController.handleDelete.bind(projectController)));
 
-  router.get("/projects", wrapRequestHandler(projectController.handleList.bind(projectController)));
-  router.post("/projects", wrapRequestHandler(projectController.handleCreate.bind(projectController)));
-  router.get("/projects/:id", wrapRequestHandler(projectController.handleGet.bind(projectController)));
-  router.put("/projects/:id", wrapRequestHandler(projectController.handleUpdate.bind(projectController)));
-  router.delete("/projects/:id", wrapRequestHandler(projectController.handleDelete.bind(projectController)));
-
-  router.get("/projects/:id/tasks", wrapRequestHandler(taskController.handleListByProject.bind(taskController)));
-  router.post("/projects/:id/tasks", wrapRequestHandler(taskController.handleCreate.bind(taskController)));
+  router.get("/projects/:id/tasks", authMiddleware, wrapRequestHandler(taskController.handleListByProject.bind(taskController)));
+  router.post("/projects/:id/tasks", authMiddleware, wrapRequestHandler(taskController.handleCreate.bind(taskController)));
 
   return router;
 };

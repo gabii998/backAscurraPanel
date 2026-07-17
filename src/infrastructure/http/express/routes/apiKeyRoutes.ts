@@ -9,10 +9,9 @@ export const buildApiKeyRoutes = (
 ): Router => {
   const router = Router();
 
-  router.use(authMiddleware);
-  router.post("/api-keys",       requireRole('admin'), wrapRequestHandler(controller.handleCreate.bind(controller)));
-  router.get("/api-keys",        wrapRequestHandler(controller.handleList.bind(controller)));
-  router.delete("/api-keys/:id", requireRole('admin'), wrapRequestHandler(controller.handleRevoke.bind(controller)));
+  router.post("/api-keys",       authMiddleware, requireRole('admin'), wrapRequestHandler(controller.handleCreate.bind(controller)));
+  router.get("/api-keys",        authMiddleware, wrapRequestHandler(controller.handleList.bind(controller)));
+  router.delete("/api-keys/:id", authMiddleware, requireRole('admin'), wrapRequestHandler(controller.handleRevoke.bind(controller)));
 
   return router;
 };

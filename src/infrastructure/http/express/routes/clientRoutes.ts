@@ -8,12 +8,11 @@ export const buildClientRoutes = (
 ): Router => {
   const router = Router();
 
-  router.use(authMiddleware);
-  router.get("/clients", wrapRequestHandler(controller.handleList.bind(controller)));
-  router.post("/clients", wrapRequestHandler(controller.handleCreate.bind(controller)));
-  router.get("/clients/:id", wrapRequestHandler(controller.handleGet.bind(controller)));
-  router.put("/clients/:id", wrapRequestHandler(controller.handleUpdate.bind(controller)));
-  router.delete("/clients/:id", wrapRequestHandler(controller.handleDelete.bind(controller)));
+  router.get("/clients", authMiddleware, wrapRequestHandler(controller.handleList.bind(controller)));
+  router.post("/clients", authMiddleware, wrapRequestHandler(controller.handleCreate.bind(controller)));
+  router.get("/clients/:id", authMiddleware, wrapRequestHandler(controller.handleGet.bind(controller)));
+  router.put("/clients/:id", authMiddleware, wrapRequestHandler(controller.handleUpdate.bind(controller)));
+  router.delete("/clients/:id", authMiddleware, wrapRequestHandler(controller.handleDelete.bind(controller)));
 
   return router;
 };

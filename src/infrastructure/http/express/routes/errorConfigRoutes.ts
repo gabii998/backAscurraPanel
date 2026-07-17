@@ -7,12 +7,11 @@ export const buildErrorConfigRoutes = (
   authMiddleware: RequestHandler,
 ): Router => {
   const router = Router();
-  router.use(authMiddleware);
 
-  router.post("/error-configs",      wrapRequestHandler(controller.handleCreate.bind(controller)));
-  router.get("/error-configs",       wrapRequestHandler(controller.handleList.bind(controller)));
-  router.get("/error-configs/:id",   wrapRequestHandler(controller.handleGet.bind(controller)));
-  router.delete("/error-configs/:id", wrapRequestHandler(controller.handleDelete.bind(controller)));
+  router.post("/error-configs",       authMiddleware, wrapRequestHandler(controller.handleCreate.bind(controller)));
+  router.get("/error-configs",        authMiddleware, wrapRequestHandler(controller.handleList.bind(controller)));
+  router.get("/error-configs/:id",    authMiddleware, wrapRequestHandler(controller.handleGet.bind(controller)));
+  router.delete("/error-configs/:id", authMiddleware, wrapRequestHandler(controller.handleDelete.bind(controller)));
 
   return router;
 };

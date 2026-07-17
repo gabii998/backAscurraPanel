@@ -8,9 +8,8 @@ export const buildWorkspaceRoutes = (
 ): Router => {
   const router = Router();
 
-  router.use(authMiddleware);
-  router.get("/workspace", wrapRequestHandler(controller.handleGet.bind(controller)));
-  router.patch("/workspace", wrapRequestHandler(controller.handleUpdate.bind(controller)));
+  router.get("/workspace", authMiddleware, wrapRequestHandler(controller.handleGet.bind(controller)));
+  router.patch("/workspace", authMiddleware, wrapRequestHandler(controller.handleUpdate.bind(controller)));
 
   return router;
 };

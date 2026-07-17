@@ -8,11 +8,10 @@ export const buildNotificationRoutes = (
 ): Router => {
   const router = Router();
 
-  router.use(authMiddleware);
-  router.get("/notifications", wrapRequestHandler(controller.handleList.bind(controller)));
-  router.get("/notifications/unread-count", wrapRequestHandler(controller.handleUnreadCount.bind(controller)));
-  router.patch("/notifications/read-all", wrapRequestHandler(controller.handleMarkAllRead.bind(controller)));
-  router.patch("/notifications/:id/read", wrapRequestHandler(controller.handleMarkRead.bind(controller)));
+  router.get("/notifications", authMiddleware, wrapRequestHandler(controller.handleList.bind(controller)));
+  router.get("/notifications/unread-count", authMiddleware, wrapRequestHandler(controller.handleUnreadCount.bind(controller)));
+  router.patch("/notifications/read-all", authMiddleware, wrapRequestHandler(controller.handleMarkAllRead.bind(controller)));
+  router.patch("/notifications/:id/read", authMiddleware, wrapRequestHandler(controller.handleMarkRead.bind(controller)));
 
   return router;
 };

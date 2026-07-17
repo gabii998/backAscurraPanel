@@ -9,20 +9,18 @@ export const buildUserRoutes = (
 ): Router => {
   const router = Router();
 
-  router.use(authMiddleware);
-
   // /me routes must come BEFORE /:id so Express doesn't treat "me" as an id
-  router.get("/users/me", wrapRequestHandler(controller.handleGetMe.bind(controller)));
-  router.patch("/users/me", wrapRequestHandler(controller.handleUpdateMe.bind(controller)));
-  router.patch("/users/me/password", wrapRequestHandler(controller.handleChangePassword.bind(controller)));
-  router.get("/users/me/notifications", wrapRequestHandler(controller.handleGetNotifications.bind(controller)));
-  router.patch("/users/me/notifications", wrapRequestHandler(controller.handleUpdateNotifications.bind(controller)));
-  router.get("/users/me/sessions", wrapRequestHandler(controller.handleGetSessions.bind(controller)));
-  router.delete("/users/me/sessions/:id", wrapRequestHandler(controller.handleRevokeSession.bind(controller)));
+  router.get("/users/me", authMiddleware, wrapRequestHandler(controller.handleGetMe.bind(controller)));
+  router.patch("/users/me", authMiddleware, wrapRequestHandler(controller.handleUpdateMe.bind(controller)));
+  router.patch("/users/me/password", authMiddleware, wrapRequestHandler(controller.handleChangePassword.bind(controller)));
+  router.get("/users/me/notifications", authMiddleware, wrapRequestHandler(controller.handleGetNotifications.bind(controller)));
+  router.patch("/users/me/notifications", authMiddleware, wrapRequestHandler(controller.handleUpdateNotifications.bind(controller)));
+  router.get("/users/me/sessions", authMiddleware, wrapRequestHandler(controller.handleGetSessions.bind(controller)));
+  router.delete("/users/me/sessions/:id", authMiddleware, wrapRequestHandler(controller.handleRevokeSession.bind(controller)));
 
-  router.get("/users", wrapRequestHandler(controller.handleList.bind(controller)));
-  router.post("/users", requireRole('admin'), wrapRequestHandler(controller.handleCreate.bind(controller)));
-  router.delete("/users/:id", requireRole('admin'), wrapRequestHandler(controller.handleDelete.bind(controller)));
+  router.get("/users", authMiddleware, wrapRequestHandler(controller.handleList.bind(controller)));
+  router.post("/users", authMiddleware, requireRole('admin'), wrapRequestHandler(controller.handleCreate.bind(controller)));
+  router.delete("/users/:id", authMiddleware, requireRole('admin'), wrapRequestHandler(controller.handleDelete.bind(controller)));
 
   return router;
 };
