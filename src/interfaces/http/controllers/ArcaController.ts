@@ -141,7 +141,7 @@ export class ArcaController {
       }
     } catch (err) {
       if (!(err instanceof Error)) throw err;
-      if (err instanceof ArcaResponseError)                       { res.status(502).json({ message: err.message, detail: err.detail }); return; }
+      if (err instanceof ArcaResponseError)                       { res.status(400).json({ message: err.message, detail: err.detail }); return; }
       if (err.message === "ARCA_NOT_CONFIGURED")               { res.status(403).json({ message: err.message }); return; }
       if (err.message === "ARCA_VOUCHER_FAILED")               {
         res.status(502).json({ message: err.message, detail: (err as Error & { detail?: string }).detail ?? "" });
@@ -164,7 +164,7 @@ export class ArcaController {
       res.json(result);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
-      if (err instanceof ArcaResponseError)     { res.status(502).json({ message: err.message, detail: err.detail }); return; }
+      if (err instanceof ArcaResponseError)     { res.status(400).json({ message: err.message, detail: err.detail }); return; }
       if (err.message === "ARCA_NOT_CONFIGURED")  { res.status(403).json({ message: err.message }); return; }
       if (err.message === "ARCA_REQUEST_FAILED")   { res.status(502).json({ message: err.message }); return; }
       throw err;
@@ -212,7 +212,7 @@ export class ArcaController {
       res.json(result);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
-      if (err instanceof ArcaResponseError)     { res.status(502).json({ message: err.message, detail: err.detail }); return; }
+      if (err instanceof ArcaResponseError)     { res.status(400).json({ message: err.message, detail: err.detail }); return; }
       if (err.message === "ARCA_NOT_CONFIGURED")  { res.status(403).json({ message: err.message }); return; }
       if (err.message === "ARCA_REQUEST_FAILED")   { res.status(502).json({ message: err.message }); return; }
       throw err;
