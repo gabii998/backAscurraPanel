@@ -1,5 +1,6 @@
 import type { ArcaConfigRepository } from "../../domain/repositories/ArcaConfigRepository";
 import type { ArcaLogRepository } from "../../domain/repositories/ArcaLogRepository";
+import { ArcaResponseError, assertArcaResponseOk, formatArcaResponseError } from "../services/ArcaResponseError";
 import { ArcaService } from "../../infrastructure/services/ArcaService";
 
 export class GetArcaTaxpayer {
@@ -20,10 +21,13 @@ export class GetArcaTaxpayer {
 
     try {
       response = await service.padron.getTaxpayerDetails(identifier);
+      assertArcaResponseOk(response);
     } catch (err) {
       status = "error";
-      error = err instanceof Error ? err.message : String(err);
-      response = { error };
+      error = err instanceof ArcaResponseError
+        ? formatArcaResponseError(err.detail)
+        : err instanceof Error ? err.message : String(err);
+      response = response ?? { error };
       try {
         await this.logRepo.create({
           configId: config.id, service: "padron", method: "getTaxpayerDetails",
@@ -33,6 +37,7 @@ export class GetArcaTaxpayer {
       } catch (logErr) {
         console.error("[ArcaLog] Failed to write error log:", logErr);
       }
+      if (err instanceof ArcaResponseError) throw err;
       throw new Error("ARCA_REQUEST_FAILED");
     }
 

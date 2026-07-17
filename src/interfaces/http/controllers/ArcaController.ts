@@ -11,6 +11,7 @@ import type { GetArcaTaxpayer } from "../../../application/use-cases/GetArcaTaxp
 import type { ListArcaLogs } from "../../../application/use-cases/ListArcaLogs";
 import type { NotifyArcaCertExpiry } from "../../../application/use-cases/NotifyArcaCertExpiry";
 import type { GenerateVoucherPdf } from "../../../application/use-cases/GenerateVoucherPdf";
+import { ArcaResponseError } from "../../../application/services/ArcaResponseError";
 import type { ApiKeyRequest } from "../../../infrastructure/http/express/middleware/ingestKeyMiddleware";
 
 export class ArcaController {
@@ -140,6 +141,7 @@ export class ArcaController {
       }
     } catch (err) {
       if (!(err instanceof Error)) throw err;
+      if (err instanceof ArcaResponseError)                       { res.status(502).json({ message: err.message, detail: err.detail }); return; }
       if (err.message === "ARCA_NOT_CONFIGURED")               { res.status(403).json({ message: err.message }); return; }
       if (err.message === "ARCA_VOUCHER_FAILED")               {
         res.status(502).json({ message: err.message, detail: (err as Error & { detail?: string }).detail ?? "" });
@@ -162,6 +164,7 @@ export class ArcaController {
       res.json(result);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
+      if (err instanceof ArcaResponseError)     { res.status(502).json({ message: err.message, detail: err.detail }); return; }
       if (err.message === "ARCA_NOT_CONFIGURED")  { res.status(403).json({ message: err.message }); return; }
       if (err.message === "ARCA_REQUEST_FAILED")   { res.status(502).json({ message: err.message }); return; }
       throw err;
@@ -209,6 +212,7 @@ export class ArcaController {
       res.json(result);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
+      if (err instanceof ArcaResponseError)     { res.status(502).json({ message: err.message, detail: err.detail }); return; }
       if (err.message === "ARCA_NOT_CONFIGURED")  { res.status(403).json({ message: err.message }); return; }
       if (err.message === "ARCA_REQUEST_FAILED")   { res.status(502).json({ message: err.message }); return; }
       throw err;

@@ -1,5 +1,6 @@
 import type { ArcaConfigRepository } from "../../domain/repositories/ArcaConfigRepository";
 import type { ArcaLogRepository } from "../../domain/repositories/ArcaLogRepository";
+import { ArcaResponseError, assertArcaResponseOk, formatArcaResponseError } from "../services/ArcaResponseError";
 import { ArcaService } from "../../infrastructure/services/ArcaService";
 
 const REQUIRED_FIELDS = [
@@ -73,10 +74,13 @@ export class CreateArcaVoucher {
 
     try {
       response = await service.billing.createNextVoucher(voucher as never);
+      assertArcaResponseOk(response);
     } catch (err) {
       status = "error";
-      error = err instanceof Error ? err.message : String(err);
-      response = { error };
+      error = err instanceof ArcaResponseError
+        ? formatArcaResponseError(err.detail)
+        : err instanceof Error ? err.message : String(err);
+      response = response ?? { error };
       try {
         await this.logRepo.create({
           configId: config.id, service: "wsfe", method: "createNextVoucher",
@@ -87,6 +91,7 @@ export class CreateArcaVoucher {
       } catch (logErr) {
         console.error("[ArcaLog] Failed to write error log:", logErr);
       }
+      if (err instanceof ArcaResponseError) throw err;
       const arcaError = new Error("ARCA_VOUCHER_FAILED");
       (arcaError as Error & { detail: string }).detail = error;
       throw arcaError;

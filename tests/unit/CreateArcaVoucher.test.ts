@@ -260,5 +260,28 @@ describe("CreateArcaVoucher", () => {
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
+
+    it("throws ARCA_RESPONSE_ERROR when AFIP returns errors inside the response body", async () => {
+      const { ArcaService } = require("../../src/infrastructure/services/ArcaService");
+      const afipResponse = { errors: { err: [{ code: 600, msg: "CUIT no autorizado" }] } };
+      (ArcaService as jest.Mock).mockImplementationOnce(() => ({
+        billing: { createNextVoucher: jest.fn().mockResolvedValue(afipResponse) },
+      }));
+      const logRepo = makeLogRepo();
+      const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
+
+      await expect(uc.execute("key-1", validVoucher, "guid-1"))
+        .rejects.toMatchObject({
+          message: "ARCA_RESPONSE_ERROR",
+          detail: [{ code: 600, message: "CUIT no autorizado" }],
+        });
+
+      expect(logRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+        status: "error",
+        response: JSON.stringify(afipResponse),
+        error: "600: CUIT no autorizado",
+        idempotencyKey: null,
+      }));
+    });
   });
 });
