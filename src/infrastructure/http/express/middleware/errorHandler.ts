@@ -31,12 +31,8 @@ export const errorHandler: ErrorRequestHandler = (
   const statusCode = resolveStatusCode(error);
   const message = resolveMessage(error, statusCode);
 
-  console.error("Unhandled request error", {
-    method: req.method,
-    path: req.originalUrl,
-    statusCode,
-    error,
-  });
+  console.error("Unhandled request error:", req.method, req.originalUrl, `(${statusCode})`);
+  console.error(error);
 
   res.status(statusCode).json({ message });
 };

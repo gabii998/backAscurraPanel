@@ -131,6 +131,10 @@ export class ArcaController {
       res.status(400).json({ message: "IDEMPOTENCY_KEY_REQUIRED" });
       return;
     }
+    if (!voucher || typeof voucher !== "object") {
+      res.status(400).json({ message: "VOUCHER_REQUIRED" });
+      return;
+    }
     try {
       const { response, replayed } = await this.createArcaVoucher.execute(apiKeyId, voucher, idempotencyKey);
       if (replayed) {
@@ -151,6 +155,7 @@ export class ArcaController {
       if (err.message === "VOUCHER_INVALID_DATE")              { res.status(400).json({ message: err.message }); return; }
       if (err.message === "VOUCHER_MISSING_IVA")               { res.status(400).json({ message: err.message }); return; }
       if (err.message === "VOUCHER_MISSING_COMPROBANTES_ASOC") { res.status(400).json({ message: err.message }); return; }
+      console.error("[ArcaVoucher] Unexpected error:", err);
       throw err;
     }
   };

@@ -81,6 +81,9 @@ export class CreateArcaVoucher {
         ? formatArcaResponseError(err.detail)
         : err instanceof Error ? err.message : String(err);
       response = response ?? { error };
+      if (!(err instanceof ArcaResponseError)) {
+        console.error("[ArcaVoucher] SDK error in createNextVoucher:", err);
+      }
       try {
         await this.logRepo.create({
           configId: config.id, service: "wsfe", method: "createNextVoucher",
