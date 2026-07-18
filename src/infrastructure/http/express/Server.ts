@@ -94,7 +94,11 @@ import { NotificationController } from "../../../interfaces/http/controllers/Not
 import { ProspectController } from "../../../interfaces/http/controllers/ProspectController";
 import { ErrorConfigController } from "../../../interfaces/http/controllers/ErrorConfigController";
 import { buildAuthMiddleware } from "./middleware/authMiddleware";
-import { notFoundHandler, errorHandler } from "./middleware/errorHandler";
+import { notFoundHandler, buildErrorHandler } from "./middleware/errorHandler";
+import { PrismaRequestLogRepository } from "../../repositories/PrismaRequestLogRepository";
+import { ListRequestLogs } from "../../../application/use-cases/ListRequestLogs";
+import { RequestLogController } from "../../../interfaces/http/controllers/RequestLogController";
+import { buildRequestLogRoutes } from "./routes/requestLogRoutes";
 import { buildAuthRoutes } from "./routes/authRoutes";
 import { buildUserRoutes } from "./routes/userRoutes";
 import { buildWorkspaceRoutes } from "./routes/workspaceRoutes";
@@ -211,6 +215,7 @@ export const buildServer = (): Express => {
   const arcaConfigRepository      = new PrismaArcaConfigRepository(encryptionService);
   const arcaLogRepository         = new PrismaArcaLogRepository();
   const contactRequestRepository  = new PrismaContactRequestRepository();
+  const requestLogRepository      = new PrismaRequestLogRepository();
 
   // Services
   const passwordHasher = new BcryptPasswordHasher();
@@ -387,10 +392,15 @@ export const buildServer = (): Express => {
   const listContactRequests        = new ListContactRequests(contactRequestRepository);
   const updateContactRequestStatus = new UpdateContactRequestStatus(contactRequestRepository);
   const contactController = new ContactController(createContactRequest, listContactRequests, updateContactRequestStatus);
+
+  // Request logs
+  const listRequestLogs      = new ListRequestLogs(requestLogRepository);
+  const requestLogController = new RequestLogController(listRequestLogs);
   app.use(buildContactRoutes(contactController, authMiddleware));
+  app.use(buildRequestLogRoutes(requestLogController, authMiddleware));
 
   app.use(notFoundHandler);
-  app.use(errorHandler);
+  app.use(buildErrorHandler(requestLogRepository));
 
   return app;
 };
