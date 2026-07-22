@@ -207,21 +207,18 @@ export class IgController {
   // ── Template Summaries ────────────────────────────────
 
   handleSummarize = async (req: Request, res: Response): Promise<void> => {
-    const { templateIds } = req.body as Record<string, unknown>;
+    const { templateIds, brandId } = req.body as Record<string, unknown>;
     const ids = Array.isArray(templateIds) ? (templateIds as string[]) : undefined;
-    const result = await this.summarizeIgTemplates.execute(ids);
+    const result = await this.summarizeIgTemplates.execute(ids, typeof brandId === "string" ? brandId : undefined);
     res.json(result);
   };
 
   handleCheckSummaryBatch = async (req: Request, res: Response): Promise<void> => {
     const { openAiBatchId, brandId } = req.body as Record<string, unknown>;
-    if (typeof openAiBatchId !== "string") {
+    if (typeof openAiBatchId !== "string" || typeof brandId !== "string") {
       res.status(400).json({ message: "MISSING_FIELDS" }); return;
     }
-    const result = await this.checkTemplateSummaryBatch.execute(
-      openAiBatchId,
-      typeof brandId === "string" ? brandId : undefined,
-    );
+    const result = await this.checkTemplateSummaryBatch.execute(openAiBatchId, brandId);
     res.json(result);
   };
 

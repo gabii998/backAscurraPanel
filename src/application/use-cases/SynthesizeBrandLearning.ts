@@ -1,9 +1,7 @@
-import type { OpenAIBatchService } from "../services/OpenAIBatchService";
 import { prisma } from "../../infrastructure/db/prisma";
+import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 export class SynthesizeBrandLearning {
-  constructor(private openAI: OpenAIBatchService) {}
-
   async execute(brandId: string): Promise<{ batchId: string }> {
     const brand = await prisma.brand.findUnique({ where: { id: brandId } });
     if (!brand) throw new Error("BRAND_NOT_FOUND");
@@ -33,7 +31,8 @@ export class SynthesizeBrandLearning {
 
     const userPrompt = `Posts APROBADOS (ordenados por engagement descendente):\n${approvedText}\n\nPosts RECHAZADOS (con motivo de rechazo):\n${rejectedText}`;
 
-    const batchId = await this.openAI.submitBatch([{
+    const openAI = await resolveOpenAIService(brandId);
+    const batchId = await openAI.submitBatch([{
       customId: `synthesis-${brandId}`,
       systemPrompt,
       userPrompt,

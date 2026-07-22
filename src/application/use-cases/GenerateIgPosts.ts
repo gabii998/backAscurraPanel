@@ -2,9 +2,9 @@ import type { BrandRepository } from "../../domain/repositories/BrandRepository"
 import type { IgTemplateRepository } from "../../domain/repositories/IgTemplateRepository";
 import type { IgPostRepository } from "../../domain/repositories/IgPostRepository";
 import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobRepository";
-import type { OpenAIBatchService } from "../services/OpenAIBatchService";
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
 import { prisma } from "../../infrastructure/db/prisma";
+import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 export interface GenerateIgPostsInput {
   brandId: string;
@@ -19,7 +19,6 @@ export class GenerateIgPosts {
     private templateRepo: IgTemplateRepository,
     private postRepo:     IgPostRepository,
     private jobRepo:      IgBatchJobRepository,
-    private openAI:       OpenAIBatchService,
   ) {}
 
   async execute(input: GenerateIgPostsInput): Promise<IgBatchJob> {
@@ -77,7 +76,8 @@ export class GenerateIgPosts {
       userPrompt: buildUserPrompt(topic, CONTENT_FORMATS[i % CONTENT_FORMATS.length]),
     }));
 
-    const batchId = await this.openAI.submitBatch(requests);
+    const openAI = await resolveOpenAIService(brandId);
+    const batchId = await openAI.submitBatch(requests);
 
     const job = await this.jobRepo.create({
       brandId,

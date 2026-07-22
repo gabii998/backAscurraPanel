@@ -160,7 +160,6 @@ import { PrismaBrandRepository } from "../../repositories/PrismaBrandRepository"
 import { PrismaIgTemplateRepository } from "../../repositories/PrismaIgTemplateRepository";
 import { PrismaIgPostRepository } from "../../repositories/PrismaIgPostRepository";
 import { PrismaIgBatchJobRepository } from "../../repositories/PrismaIgBatchJobRepository";
-import { OpenAIService } from "../../services/OpenAIService";
 import { CreateBrand } from "../../../application/use-cases/CreateBrand";
 import { ListBrands } from "../../../application/use-cases/ListBrands";
 import { GetBrand } from "../../../application/use-cases/GetBrand";
@@ -432,8 +431,6 @@ export const buildServer = (): Express => {
   const igTemplateRepository  = new PrismaIgTemplateRepository();
   const igPostRepository      = new PrismaIgPostRepository();
   const igBatchJobRepository  = new PrismaIgBatchJobRepository();
-  const openAIService         = new OpenAIService(env.openAiApiKey);
-
   const createBrand        = new CreateBrand(brandRepository);
   const listBrands         = new ListBrands(brandRepository);
   const getBrand           = new GetBrand(brandRepository);
@@ -448,20 +445,20 @@ export const buildServer = (): Express => {
   const deleteIgTemplate   = new DeleteIgTemplate(igTemplateRepository);
   const listIgTemplates    = new ListIgTemplates(igTemplateRepository);
 
-  const generateIgPosts    = new GenerateIgPosts(brandRepository, igTemplateRepository, igPostRepository, igBatchJobRepository, openAIService);
-  const checkBatchStatus   = new CheckBatchStatus(igBatchJobRepository, igPostRepository, igTemplateRepository, openAIService);
-  const summarizeTemplates = new SummarizeIgTemplates(igTemplateRepository, openAIService);
-  const checkSummaryBatch  = new CheckTemplateSummaryBatch(igTemplateRepository, openAIService);
+  const generateIgPosts    = new GenerateIgPosts(brandRepository, igTemplateRepository, igPostRepository, igBatchJobRepository);
+  const checkBatchStatus   = new CheckBatchStatus(igBatchJobRepository, igPostRepository, igTemplateRepository);
+  const summarizeTemplates = new SummarizeIgTemplates(igTemplateRepository);
+  const checkSummaryBatch  = new CheckTemplateSummaryBatch(igTemplateRepository);
 
   const listIgPosts             = new ListIgPosts(igPostRepository);
   const getIgPost               = new GetIgPost(igPostRepository);
-  const approveIgPost           = new ApproveIgPost(igPostRepository, openAIService);
-  const rejectIgPost            = new RejectIgPost(igPostRepository, openAIService);
+  const approveIgPost           = new ApproveIgPost(igPostRepository);
+  const rejectIgPost            = new RejectIgPost(igPostRepository);
   const listIgBatchJobs         = new ListIgBatchJobs(igBatchJobRepository);
   const getIgBatchJob           = new GetIgBatchJob(igBatchJobRepository);
   const listIgCostLogs          = new ListIgCostLogs();
-  const synthesizeBrandLearning = new SynthesizeBrandLearning(openAIService);
-  const checkSynthesisBatch     = new CheckSynthesisBatch(openAIService);
+  const synthesizeBrandLearning = new SynthesizeBrandLearning();
+  const checkSynthesisBatch     = new CheckSynthesisBatch();
   const metaGraphService        = new MetaGraphService();
   const connectIgAccount        = new ConnectIgAccount(brandRepository, encryptionService);
   const uploadIgPostImage       = new UploadIgPostImage(igPostRepository);

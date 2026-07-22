@@ -1,12 +1,12 @@
-import type { OpenAIBatchService } from "../services/OpenAIBatchService";
 import { prisma } from "../../infrastructure/db/prisma";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
+import { env } from "../../config/env";
+import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 export class CheckSynthesisBatch {
-  constructor(private openAI: OpenAIBatchService) {}
-
   async execute(brandId: string, openAiBatchId: string): Promise<{ done: boolean; insights?: string }> {
-    const { status, outputFileId } = await this.openAI.getBatchStatus(openAiBatchId);
+    const openAI = await resolveOpenAIService(brandId);
+    const { status, outputFileId } = await openAI.getBatchStatus(openAiBatchId);
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
       await prisma.brandLearning.updateMany({
@@ -18,7 +18,7 @@ export class CheckSynthesisBatch {
 
     if (status !== "completed" || !outputFileId) return { done: false };
 
-    const results = await this.openAI.downloadBatchResults(outputFileId);
+    const results = await openAI.downloadBatchResults(outputFileId);
     const result = results.find(r => r.customId === `synthesis-${brandId}`);
 
     if (!result || result.error) return { done: false };
@@ -33,13 +33,13 @@ export class CheckSynthesisBatch {
 
     if (result.usage) {
       const { promptTokens, completionTokens } = result.usage;
-      const estimatedCostUsd = calculateBatchCost("gpt-4o-mini", promptTokens, completionTokens);
+      const estimatedCostUsd = calculateBatchCost(env.openAiModel, promptTokens, completionTokens);
       await prisma.igCostLog.create({
         data: {
           brandId,
           operation: "brand_synthesis",
           entityId: openAiBatchId,
-          model: "gpt-4o-mini",
+          model: env.openAiModel,
           inputTokens: promptTokens,
           outputTokens: completionTokens,
           totalTokens: promptTokens + completionTokens,

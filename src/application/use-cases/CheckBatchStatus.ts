@@ -1,10 +1,11 @@
 import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobRepository";
 import type { IgPostRepository } from "../../domain/repositories/IgPostRepository";
 import type { IgTemplateRepository } from "../../domain/repositories/IgTemplateRepository";
-import type { OpenAIBatchService } from "../services/OpenAIBatchService";
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
 import { prisma } from "../../infrastructure/db/prisma";
+import { env } from "../../config/env";
+import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 interface PostResult {
   caption: string;
@@ -20,7 +21,6 @@ export class CheckBatchStatus {
     private jobRepo:      IgBatchJobRepository,
     private postRepo:     IgPostRepository,
     private templateRepo: IgTemplateRepository,
-    private openAI:       OpenAIBatchService,
   ) {}
 
   async execute(jobId: string): Promise<IgBatchJob> {
@@ -30,7 +30,8 @@ export class CheckBatchStatus {
     if (job.status === "completed" || job.status === "failed") return job;
     if (!job.openAiBatchId) return job;
 
-    const { status, outputFileId } = await this.openAI.getBatchStatus(job.openAiBatchId);
+    const openAI = await resolveOpenAIService(job.brandId);
+    const { status, outputFileId } = await openAI.getBatchStatus(job.openAiBatchId);
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
       return this.jobRepo.update(jobId, { status: "failed", errorMessage: `OpenAI batch status: ${status}` });
@@ -40,7 +41,7 @@ export class CheckBatchStatus {
       return this.jobRepo.update(jobId, { status: "processing" });
     }
 
-    const results = await this.openAI.downloadBatchResults(outputFileId);
+    const results = await openAI.downloadBatchResults(outputFileId);
     const posts = await this.postRepo.findByBatchJobId(jobId);
 
     let totalInput = 0;
@@ -88,14 +89,14 @@ export class CheckBatchStatus {
       });
     }
 
-    const estimatedCostUsd = calculateBatchCost("gpt-4o-mini", totalInput, totalOutput);
+    const estimatedCostUsd = calculateBatchCost(env.openAiModel, totalInput, totalOutput);
 
     await prisma.igCostLog.create({
       data: {
         brandId:          job.brandId,
         operation:        "post_generation",
         entityId:         jobId,
-        model:            "gpt-4o-mini",
+        model:            env.openAiModel,
         inputTokens:      totalInput,
         outputTokens:     totalOutput,
         totalTokens:      totalInput + totalOutput,

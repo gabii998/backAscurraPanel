@@ -12,5 +12,6 @@ export const env = {
   arcaEncryptionKey: process.env.ARCA_ENCRYPTION_KEY ?? "",
   appVersion: process.env.APP_VERSION || process.env.GITHUB_SHA || "unknown",
   openAiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openAiModel:  process.env.OPENAI_MODEL  ?? "gpt-4o-mini",
   baseUrl: process.env.BASE_URL ?? "http://localhost:3000",
 };

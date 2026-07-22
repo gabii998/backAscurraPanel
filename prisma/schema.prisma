@@ -466,6 +466,8 @@ model Brand {
   logoUrl       String          @default("")
   igUserId      String          @default("")
   igAccessToken String          @default("")
+  openAiApiKey  String          @default("")
+  openAiModel   String          @default("")
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   examples      IgExamplePost[]

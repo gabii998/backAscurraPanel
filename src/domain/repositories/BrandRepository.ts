@@ -18,6 +18,8 @@ export interface BrandUpdateData {
   logoUrl?: string;
   igUserId?: string;
   igAccessToken?: string;
+  openAiApiKey?: string;
+  openAiModel?: string;
 }
 
 export interface BrandRepository {

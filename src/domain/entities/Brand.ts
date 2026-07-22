@@ -7,6 +7,8 @@ export interface Brand {
   colorPalette: string[];
   logoUrl: string;
   igUserId: string;
+  openAiModel: string;
+  hasOpenAiApiKey: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

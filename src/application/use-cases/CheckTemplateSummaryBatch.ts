@@ -1,20 +1,19 @@
 import type { IgTemplateRepository } from "../../domain/repositories/IgTemplateRepository";
-import type { OpenAIBatchService } from "../services/OpenAIBatchService";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
 import { prisma } from "../../infrastructure/db/prisma";
+import { env } from "../../config/env";
+import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 export class CheckTemplateSummaryBatch {
-  constructor(
-    private templateRepo: IgTemplateRepository,
-    private openAI:       OpenAIBatchService,
-  ) {}
+  constructor(private templateRepo: IgTemplateRepository) {}
 
-  async execute(openAiBatchId: string, brandId?: string): Promise<{ updatedCount: number }> {
-    const { status, outputFileId } = await this.openAI.getBatchStatus(openAiBatchId);
+  async execute(openAiBatchId: string, brandId: string): Promise<{ updatedCount: number }> {
+    const openAI = await resolveOpenAIService(brandId);
+    const { status, outputFileId } = await openAI.getBatchStatus(openAiBatchId);
 
     if (status !== "completed" || !outputFileId) return { updatedCount: 0 };
 
-    const results = await this.openAI.downloadBatchResults(outputFileId);
+    const results = await openAI.downloadBatchResults(outputFileId);
     let updatedCount = 0;
     let totalInput = 0;
     let totalOutput = 0;
@@ -33,14 +32,14 @@ export class CheckTemplateSummaryBatch {
       updatedCount++;
     }
 
-    const estimatedCostUsd = calculateBatchCost("gpt-4o-mini", totalInput, totalOutput);
+    const estimatedCostUsd = calculateBatchCost(env.openAiModel, totalInput, totalOutput);
 
     await prisma.igCostLog.create({
       data: {
         brandId:          brandId ?? null,
         operation:        "template_summary",
         entityId:         openAiBatchId,
-        model:            "gpt-4o-mini",
+        model:            env.openAiModel,
         inputTokens:      totalInput,
         outputTokens:     totalOutput,
         totalTokens:      totalInput + totalOutput,

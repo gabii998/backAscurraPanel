@@ -4,7 +4,7 @@ import type { OpenAIBatchService, BatchRequest, BatchResult } from "../../applic
 export class OpenAIService implements OpenAIBatchService {
   private client: OpenAI;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, private model: string = "gpt-4o-mini") {
     this.client = new OpenAI({ apiKey });
   }
 
@@ -15,7 +15,7 @@ export class OpenAIService implements OpenAIBatchService {
         method: "POST",
         url: "/v1/chat/completions",
         body: {
-          model: "gpt-4o-mini",
+          model: this.model,
           messages: [
             { role: "system", content: r.systemPrompt },
             { role: "user",   content: r.userPrompt },

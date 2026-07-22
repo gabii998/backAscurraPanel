@@ -2,13 +2,9 @@ import type { IgPostRepository } from "../../domain/repositories/IgPostRepositor
 import type { IgPost } from "../../domain/entities/IgPost";
 import { prisma } from "../../infrastructure/db/prisma";
 import { SynthesizeBrandLearning } from "./SynthesizeBrandLearning";
-import type { OpenAIBatchService } from "../services/OpenAIBatchService";
 
 export class RejectIgPost {
-  constructor(
-    private repo: IgPostRepository,
-    private openAI: OpenAIBatchService,
-  ) {}
+  constructor(private repo: IgPostRepository) {}
 
   async execute(id: string, rejectReason?: string): Promise<IgPost> {
     const post = await this.repo.findById(id);
@@ -29,7 +25,7 @@ export class RejectIgPost {
 
     const total = learning.totalApproved + learning.totalRejected;
     if (total > 0 && total % 10 === 0) {
-      new SynthesizeBrandLearning(this.openAI).execute(post.brandId).catch(() => {});
+      new SynthesizeBrandLearning().execute(post.brandId).catch(() => {});
     }
 
     return rejected;
