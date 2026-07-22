@@ -156,6 +156,45 @@ import { PrismaWhatsAppMessageRepository } from "../../repositories/PrismaWhatsA
 import { PrismaWhatsAppLogRepository } from "../../repositories/PrismaWhatsAppLogRepository";
 import { WhatsAppController } from "../../../interfaces/http/controllers/WhatsAppController";
 import { buildWhatsAppRoutes } from "./routes/whatsAppRoutes";
+import { PrismaBrandRepository } from "../../repositories/PrismaBrandRepository";
+import { PrismaIgTemplateRepository } from "../../repositories/PrismaIgTemplateRepository";
+import { PrismaIgPostRepository } from "../../repositories/PrismaIgPostRepository";
+import { PrismaIgBatchJobRepository } from "../../repositories/PrismaIgBatchJobRepository";
+import { OpenAIService } from "../../services/OpenAIService";
+import { CreateBrand } from "../../../application/use-cases/CreateBrand";
+import { ListBrands } from "../../../application/use-cases/ListBrands";
+import { GetBrand } from "../../../application/use-cases/GetBrand";
+import { UpdateBrand } from "../../../application/use-cases/UpdateBrand";
+import { DeleteBrand } from "../../../application/use-cases/DeleteBrand";
+import { CreateIgExamplePost } from "../../../application/use-cases/CreateIgExamplePost";
+import { DeleteIgExamplePost } from "../../../application/use-cases/DeleteIgExamplePost";
+import { ListIgExamplePosts } from "../../../application/use-cases/ListIgExamplePosts";
+import { CreateIgTemplate } from "../../../application/use-cases/CreateIgTemplate";
+import { UpdateIgTemplate } from "../../../application/use-cases/UpdateIgTemplate";
+import { DeleteIgTemplate } from "../../../application/use-cases/DeleteIgTemplate";
+import { ListIgTemplates } from "../../../application/use-cases/ListIgTemplates";
+import { GenerateIgPosts } from "../../../application/use-cases/GenerateIgPosts";
+import { CheckBatchStatus } from "../../../application/use-cases/CheckBatchStatus";
+import { SummarizeIgTemplates } from "../../../application/use-cases/SummarizeIgTemplates";
+import { CheckTemplateSummaryBatch } from "../../../application/use-cases/CheckTemplateSummaryBatch";
+import { ListIgPosts } from "../../../application/use-cases/ListIgPosts";
+import { GetIgPost } from "../../../application/use-cases/GetIgPost";
+import { ApproveIgPost } from "../../../application/use-cases/ApproveIgPost";
+import { RejectIgPost } from "../../../application/use-cases/RejectIgPost";
+import { ListIgBatchJobs } from "../../../application/use-cases/ListIgBatchJobs";
+import { GetIgBatchJob } from "../../../application/use-cases/GetIgBatchJob";
+import { ListIgCostLogs } from "../../../application/use-cases/ListIgCostLogs";
+import { SynthesizeBrandLearning } from "../../../application/use-cases/SynthesizeBrandLearning";
+import { CheckSynthesisBatch } from "../../../application/use-cases/CheckSynthesisBatch";
+import { ConnectIgAccount } from "../../../application/use-cases/ConnectIgAccount";
+import { UploadIgPostImage } from "../../../application/use-cases/UploadIgPostImage";
+import { PublishIgPost } from "../../../application/use-cases/PublishIgPost";
+import { SyncIgPostMetrics } from "../../../application/use-cases/SyncIgPostMetrics";
+import { MetaGraphService } from "../../services/MetaGraphService";
+import { BrandController } from "../../../interfaces/http/controllers/BrandController";
+import { IgController } from "../../../interfaces/http/controllers/IgController";
+import { buildBrandRoutes } from "./routes/brandRoutes";
+import { buildIgRoutes } from "./routes/igRoutes";
 import { CreateContactRequest } from "../../../application/use-cases/CreateContactRequest";
 import { ListContactRequests } from "../../../application/use-cases/ListContactRequests";
 import { UpdateContactRequestStatus } from "../../../application/use-cases/UpdateContactRequestStatus";
@@ -187,6 +226,7 @@ export const buildServer = (): Express => {
   app.use(cors(corsOptions));
   app.options("*", cors(corsOptions));
   app.use(express.json());
+  app.use("/uploads", express.static("public/uploads"));
 
   app.get("/health", (_req, res) => {
     res.json(buildHealthResponse(env.appVersion));
@@ -387,6 +427,50 @@ export const buildServer = (): Express => {
   app.use(buildTaskRoutes(taskController, authMiddleware));
   app.use(buildClientRoutes(clientController, authMiddleware));
 
+  // Instagram Generator use cases + controllers
+  const brandRepository       = new PrismaBrandRepository();
+  const igTemplateRepository  = new PrismaIgTemplateRepository();
+  const igPostRepository      = new PrismaIgPostRepository();
+  const igBatchJobRepository  = new PrismaIgBatchJobRepository();
+  const openAIService         = new OpenAIService(env.openAiApiKey);
+
+  const createBrand        = new CreateBrand(brandRepository);
+  const listBrands         = new ListBrands(brandRepository);
+  const getBrand           = new GetBrand(brandRepository);
+  const updateBrand        = new UpdateBrand(brandRepository);
+  const deleteBrand        = new DeleteBrand(brandRepository);
+  const createIgExample    = new CreateIgExamplePost(brandRepository);
+  const deleteIgExample    = new DeleteIgExamplePost();
+  const listIgExamples     = new ListIgExamplePosts();
+
+  const createIgTemplate   = new CreateIgTemplate(igTemplateRepository);
+  const updateIgTemplate   = new UpdateIgTemplate(igTemplateRepository);
+  const deleteIgTemplate   = new DeleteIgTemplate(igTemplateRepository);
+  const listIgTemplates    = new ListIgTemplates(igTemplateRepository);
+
+  const generateIgPosts    = new GenerateIgPosts(brandRepository, igTemplateRepository, igPostRepository, igBatchJobRepository, openAIService);
+  const checkBatchStatus   = new CheckBatchStatus(igBatchJobRepository, igPostRepository, igTemplateRepository, openAIService);
+  const summarizeTemplates = new SummarizeIgTemplates(igTemplateRepository, openAIService);
+  const checkSummaryBatch  = new CheckTemplateSummaryBatch(igTemplateRepository, openAIService);
+
+  const listIgPosts             = new ListIgPosts(igPostRepository);
+  const getIgPost               = new GetIgPost(igPostRepository);
+  const approveIgPost           = new ApproveIgPost(igPostRepository, openAIService);
+  const rejectIgPost            = new RejectIgPost(igPostRepository, openAIService);
+  const listIgBatchJobs         = new ListIgBatchJobs(igBatchJobRepository);
+  const getIgBatchJob           = new GetIgBatchJob(igBatchJobRepository);
+  const listIgCostLogs          = new ListIgCostLogs();
+  const synthesizeBrandLearning = new SynthesizeBrandLearning(openAIService);
+  const checkSynthesisBatch     = new CheckSynthesisBatch(openAIService);
+  const metaGraphService        = new MetaGraphService();
+  const connectIgAccount        = new ConnectIgAccount(brandRepository, encryptionService);
+  const uploadIgPostImage       = new UploadIgPostImage(igPostRepository);
+  const syncIgPostMetrics       = new SyncIgPostMetrics(igPostRepository, brandRepository, metaGraphService, encryptionService);
+  const publishIgPost           = new PublishIgPost(igPostRepository, brandRepository, metaGraphService, encryptionService, syncIgPostMetrics);
+
+  const brandController = new BrandController(createBrand, listBrands, getBrand, updateBrand, deleteBrand, createIgExample, deleteIgExample, listIgExamples);
+  const igController    = new IgController(createIgTemplate, updateIgTemplate, deleteIgTemplate, listIgTemplates, generateIgPosts, checkBatchStatus, summarizeTemplates, checkSummaryBatch, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, uploadIgPostImage, publishIgPost, syncIgPostMetrics);
+
   // Contact requests use cases + controller
   const createContactRequest       = new CreateContactRequest(contactRequestRepository);
   const listContactRequests        = new ListContactRequests(contactRequestRepository);
@@ -396,6 +480,8 @@ export const buildServer = (): Express => {
   // Request logs
   const listRequestLogs      = new ListRequestLogs(requestLogRepository);
   const requestLogController = new RequestLogController(listRequestLogs);
+  app.use(buildBrandRoutes(brandController, authMiddleware));
+  app.use(buildIgRoutes(igController, authMiddleware));
   app.use(buildContactRoutes(contactController, authMiddleware));
   app.use(buildRequestLogRoutes(requestLogController, authMiddleware));
 

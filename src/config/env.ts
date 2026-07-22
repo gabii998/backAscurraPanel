@@ -11,4 +11,6 @@ export const env = {
   apiUrl: process.env.API_URL || "http://localhost:3000",
   arcaEncryptionKey: process.env.ARCA_ENCRYPTION_KEY ?? "",
   appVersion: process.env.APP_VERSION || process.env.GITHUB_SHA || "unknown",
+  openAiApiKey: process.env.OPENAI_API_KEY ?? "",
+  baseUrl: process.env.BASE_URL ?? "http://localhost:3000",
 };

@@ -1,0 +1,27 @@
+export type IgPostStatus = "generating" | "draft" | "approved" | "rejected";
+
+export interface IgPost {
+  id: string;
+  brandId: string;
+  templateId: string | null;
+  batchJobId: string | null;
+  caption: string;
+  hashtags: string[];
+  variables: Record<string, string>;
+  status: IgPostStatus;
+  approvedById: string | null;
+  approvedAt: Date | null;
+  rejectedAt: Date | null;
+  rejectReason: string;
+  imageUrl: string | null;
+  instagramMediaId: string | null;
+  publishStatus: string;
+  publishedAt: Date | null;
+  igImpressions: number;
+  igReach: number;
+  igEngagement: number;
+  igSaved: number;
+  igSyncedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
