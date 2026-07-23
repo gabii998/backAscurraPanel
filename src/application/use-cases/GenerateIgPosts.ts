@@ -117,7 +117,7 @@ function topHashtags(posts: { hashtags: string[] }[], limit = 15): string[] {
 }
 
 function buildSystemPrompt(
-  brand: { name: string; industry: string; acknowledge: string; voice: string },
+  brand: { name: string; industry: string; acknowledge: string; voice: string; typography?: { primary?: string; secondary?: string; googleFontsUrl?: string } },
   templates: Array<{ id: string; name: string; summary: string; variables: string[] }>,
   colorPalette: string[],
   approvedPosts: Array<{ caption: string; hashtags: string[]; igReach: number; igEngagement: number; igSaved: number; igSyncedAt: Date | null; template: { name: string } | null }>,
@@ -166,10 +166,23 @@ function buildSystemPrompt(
     contextSection += `\n💡 Patrones aprendidos de esta marca:\n${insights}\n`;
   }
 
+  const typography = brand.typography ?? {};
+  const typographySection = [
+    `- Fuente principal: ${typography.primary || "sin especificar"}`,
+    typography.secondary ? `- Fuente secundaria: ${typography.secondary}` : null,
+    typography.googleFontsUrl ? `- Importar con: <link href="${typography.googleFontsUrl}" rel="stylesheet">` : null,
+  ].filter(Boolean).join("\n");
+
+  const htmlFontRule = typography.googleFontsUrl
+    ? `- Si generás templateHtml, incluí el <link> de Google Fonts en el <head> y usá las fuentes de la marca en los estilos CSS.`
+    : `- Si generás templateHtml, usá las fuentes del sistema o las fuentes de la marca si están especificadas.`;
+
   return `Sos un experto en social media para la marca "${brand.name}" (${brand.industry || "general"}).
 Descripción de la marca: ${brand.acknowledge || "No especificada"}
 Voz de la marca: ${brand.voice || "No especificada"}
 Paleta de colores: ${JSON.stringify(colorPalette)}
+Tipografía de la marca:
+${typographySection}
 
 Templates disponibles (solo elegir por ID, NO generarás el HTML a menos que sea necesario):
 ${templateList}
@@ -177,7 +190,8 @@ ${contextSection}
 Reglas:
 - Elegí el templateId más apropiado para el post según la descripción del template.
 - Si no hay templates disponibles o ninguno aplica, devolvé templateId: null y generá templateHtml (HTML/CSS completo, formato cuadrado 1080x1080px, usando los colores de la marca como variables CSS, con placeholders {{variable}} para el contenido dinámico) y templateName con un nombre descriptivo.
-- El HTML generado debe incluir: estilos inline o <style>, no referencias a archivos externos.
+- El HTML generado debe incluir: estilos inline o <style>, no referencias a archivos externos salvo Google Fonts si la marca lo tiene configurado.
+- ${htmlFontRule}
 - Devolvé SOLO JSON válido, sin texto adicional ni markdown.
 
 Schema de respuesta:

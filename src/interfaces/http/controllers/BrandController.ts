@@ -39,7 +39,7 @@ export class BrandController {
   };
 
   handleCreate = async (req: Request, res: Response): Promise<void> => {
-    const { name, industry, acknowledge, voice, colorPalette, logoUrl } = req.body as Record<string, unknown>;
+    const { name, industry, acknowledge, voice, colorPalette, typography, logoUrl } = req.body as Record<string, unknown>;
     try {
       const brand = await this.createBrand.execute({
         name:         typeof name         === "string" ? name : "",
@@ -47,6 +47,7 @@ export class BrandController {
         acknowledge:  typeof acknowledge  === "string" ? acknowledge : undefined,
         voice:        typeof voice        === "string" ? voice : undefined,
         colorPalette: Array.isArray(colorPalette) ? (colorPalette as string[]) : undefined,
+        typography:   typography && typeof typography === "object" ? (typography as { primary?: string; secondary?: string; googleFontsUrl?: string }) : undefined,
         logoUrl:      typeof logoUrl      === "string" ? logoUrl : undefined,
       });
       res.status(201).json(brand);
@@ -59,7 +60,10 @@ export class BrandController {
   };
 
   handleUpdate = async (req: Request, res: Response): Promise<void> => {
-    const { name, industry, acknowledge, voice, colorPalette, logoUrl } = req.body as Record<string, unknown>;
+    const { name, industry, acknowledge, voice, colorPalette, typography, logoUrl } = req.body as Record<string, unknown>;
+    const typographyValue = typography && typeof typography === "object" && !Array.isArray(typography)
+      ? (typography as { primary?: string; secondary?: string; googleFontsUrl?: string })
+      : undefined;
     try {
       const brand = await this.updateBrand.execute(req.params.id, {
         ...(typeof name        === "string" && { name }),
@@ -67,6 +71,7 @@ export class BrandController {
         ...(typeof acknowledge === "string" && { acknowledge }),
         ...(typeof voice       === "string" && { voice }),
         ...(Array.isArray(colorPalette)     && { colorPalette: colorPalette as string[] }),
+        ...(typographyValue !== undefined   && { typography: typographyValue }),
         ...(typeof logoUrl     === "string" && { logoUrl }),
       });
       res.json(brand);

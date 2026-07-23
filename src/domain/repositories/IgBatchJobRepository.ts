@@ -20,6 +20,7 @@ export interface IgBatchJobUpdateData {
 export interface IgBatchJobRepository {
   create(data: IgBatchJobCreateData): Promise<IgBatchJob>;
   findByBrandId(brandId: string): Promise<IgBatchJob[]>;
+  findByStatus(status: string): Promise<IgBatchJob[]>;
   findById(id: string): Promise<IgBatchJob | null>;
   update(id: string, data: IgBatchJobUpdateData): Promise<IgBatchJob>;
 }

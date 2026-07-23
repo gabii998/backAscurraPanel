@@ -1,5 +1,5 @@
 import type { BrandRepository } from "../../domain/repositories/BrandRepository";
-import type { Brand } from "../../domain/entities/Brand";
+import type { Brand, BrandTypography } from "../../domain/entities/Brand";
 
 export interface CreateBrandInput {
   name: string;
@@ -7,6 +7,7 @@ export interface CreateBrandInput {
   acknowledge?: string;
   voice?: string;
   colorPalette?: string[];
+  typography?: BrandTypography;
   logoUrl?: string;
 }
 

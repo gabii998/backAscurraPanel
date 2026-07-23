@@ -1,4 +1,4 @@
-import type { Brand } from "../entities/Brand";
+import type { Brand, BrandTypography } from "../entities/Brand";
 
 export interface BrandCreateData {
   name: string;
@@ -6,6 +6,7 @@ export interface BrandCreateData {
   acknowledge?: string;
   voice?: string;
   colorPalette?: string[];
+  typography?: BrandTypography;
   logoUrl?: string;
 }
 
@@ -15,6 +16,7 @@ export interface BrandUpdateData {
   acknowledge?: string;
   voice?: string;
   colorPalette?: string[];
+  typography?: BrandTypography;
   logoUrl?: string;
   igUserId?: string;
   igAccessToken?: string;

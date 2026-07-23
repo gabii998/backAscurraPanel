@@ -41,6 +41,14 @@ export class PrismaIgBatchJobRepository implements IgBatchJobRepository {
     return rows.map(r => mapJob(r as unknown as Record<string, unknown>));
   }
 
+  async findByStatus(status: string): Promise<IgBatchJob[]> {
+    const rows = await prisma.igBatchJob.findMany({
+      where: { status },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(r => mapJob(r as unknown as Record<string, unknown>));
+  }
+
   async findById(id: string): Promise<IgBatchJob | null> {
     const raw = await prisma.igBatchJob.findUnique({ where: { id } });
     return raw ? mapJob(raw as unknown as Record<string, unknown>) : null;

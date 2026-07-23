@@ -1,10 +1,22 @@
 import { prisma } from "../db/prisma";
 import type { BrandRepository, BrandCreateData, BrandUpdateData } from "../../domain/repositories/BrandRepository";
-import type { Brand } from "../../domain/entities/Brand";
+import type { Brand, BrandTypography } from "../../domain/entities/Brand";
 import { EncryptionService } from "../services/EncryptionService";
 import { env } from "../../config/env";
 
 const encryption = new EncryptionService(env.arcaEncryptionKey);
+
+function mapTypography(raw: unknown): BrandTypography {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const t = raw as Record<string, unknown>;
+    return {
+      primary:       typeof t.primary       === "string" ? t.primary       : undefined,
+      secondary:     typeof t.secondary     === "string" ? t.secondary     : undefined,
+      googleFontsUrl: typeof t.googleFontsUrl === "string" ? t.googleFontsUrl : undefined,
+    };
+  }
+  return {};
+}
 
 function mapBrand(raw: Record<string, unknown>): Brand {
   return {
@@ -14,6 +26,7 @@ function mapBrand(raw: Record<string, unknown>): Brand {
     acknowledge:     raw.acknowledge  as string,
     voice:           raw.voice        as string,
     colorPalette:    Array.isArray(raw.colorPalette) ? (raw.colorPalette as string[]) : [],
+    typography:      mapTypography(raw.typography),
     logoUrl:         raw.logoUrl      as string,
     igUserId:        (raw.igUserId    as string) ?? "",
     openAiModel:     (raw.openAiModel as string) ?? "",
@@ -32,6 +45,8 @@ export class PrismaBrandRepository implements BrandRepository {
         acknowledge:  data.acknowledge  ?? "",
         voice:        data.voice        ?? "",
         colorPalette: data.colorPalette ?? [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        typography:   (data.typography   ?? {}) as any,
         logoUrl:      data.logoUrl      ?? "",
       },
     });
@@ -57,6 +72,8 @@ export class PrismaBrandRepository implements BrandRepository {
         ...(data.acknowledge  !== undefined && { acknowledge: data.acknowledge }),
         ...(data.voice        !== undefined && { voice: data.voice }),
         ...(data.colorPalette !== undefined && { colorPalette: data.colorPalette }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...(data.typography   !== undefined && { typography: data.typography as any }),
         ...(data.logoUrl      !== undefined && { logoUrl: data.logoUrl }),
         ...(data.igUserId      !== undefined && { igUserId: data.igUserId }),
         ...(data.igAccessToken !== undefined && { igAccessToken: data.igAccessToken }),

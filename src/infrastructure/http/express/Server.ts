@@ -204,6 +204,7 @@ import { buildContactRoutes } from "./routes/contactRoutes";
 import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "../swagger/openapi";
 import { buildHealthResponse } from "./health";
+import { startBatchPollingJob } from "../../jobs/batchPollingJob";
 
 export const buildServer = (): Express => {
   const app = express();
@@ -482,6 +483,8 @@ export const buildServer = (): Express => {
   const requestLogController = new RequestLogController(listRequestLogs);
   app.use(buildBrandRoutes(brandController, authMiddleware));
   app.use(buildIgRoutes(igController, authMiddleware));
+
+  startBatchPollingJob(checkBatchStatus, igBatchJobRepository);
   app.use(buildContactRoutes(contactController, authMiddleware));
   app.use(buildRequestLogRoutes(requestLogController, authMiddleware));
 
