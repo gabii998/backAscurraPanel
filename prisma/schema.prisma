@@ -449,6 +449,7 @@ model RequestLog {
   requestBody  String?
   responseBody String?
   errorMessage String?
+  durationMs   Int?
   createdAt    DateTime @default(now())
 
   @@index([createdAt(sort: Desc)])

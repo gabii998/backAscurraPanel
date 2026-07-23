@@ -6,5 +6,6 @@ export interface RequestLog {
   requestBody: string | null;
   responseBody: string | null;
   errorMessage: string | null;
+  durationMs: number | null;
   createdAt: Date;
 }

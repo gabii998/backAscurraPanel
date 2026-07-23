@@ -95,6 +95,7 @@ import { ProspectController } from "../../../interfaces/http/controllers/Prospec
 import { ErrorConfigController } from "../../../interfaces/http/controllers/ErrorConfigController";
 import { buildAuthMiddleware } from "./middleware/authMiddleware";
 import { notFoundHandler, buildErrorHandler } from "./middleware/errorHandler";
+import { buildRequestLoggerMiddleware } from "./middleware/requestLogger";
 import { PrismaRequestLogRepository } from "../../repositories/PrismaRequestLogRepository";
 import { ListRequestLogs } from "../../../application/use-cases/ListRequestLogs";
 import { RequestLogController } from "../../../interfaces/http/controllers/RequestLogController";
@@ -227,6 +228,9 @@ export const buildServer = (): Express => {
   app.use(express.json());
   app.use("/uploads", express.static("public/uploads"));
 
+  const requestLogRepository = new PrismaRequestLogRepository();
+  app.use(buildRequestLoggerMiddleware(requestLogRepository));
+
   app.get("/health", (_req, res) => {
     res.json(buildHealthResponse(env.appVersion));
   });
@@ -254,7 +258,6 @@ export const buildServer = (): Express => {
   const arcaConfigRepository      = new PrismaArcaConfigRepository(encryptionService);
   const arcaLogRepository         = new PrismaArcaLogRepository();
   const contactRequestRepository  = new PrismaContactRequestRepository();
-  const requestLogRepository      = new PrismaRequestLogRepository();
 
   // Services
   const passwordHasher = new BcryptPasswordHasher();
@@ -483,7 +486,7 @@ export const buildServer = (): Express => {
   app.use(buildRequestLogRoutes(requestLogController, authMiddleware));
 
   app.use(notFoundHandler);
-  app.use(buildErrorHandler(requestLogRepository));
+  app.use(buildErrorHandler());
 
   return app;
 };
