@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma";
-import type { RequestLogRepository } from "../../domain/repositories/RequestLogRepository";
+import type { RequestLogRepository, RequestLogFilters } from "../../domain/repositories/RequestLogRepository";
 import type { RequestLog } from "../../domain/entities/RequestLog";
 
 export class PrismaRequestLogRepository implements RequestLogRepository {
@@ -7,15 +7,18 @@ export class PrismaRequestLogRepository implements RequestLogRepository {
     await prisma.requestLog.create({ data: log });
   }
 
-  async list(skip = 0, limit = 50): Promise<RequestLog[]> {
+  async list(skip = 0, limit = 50, filters?: RequestLogFilters): Promise<RequestLog[]> {
     return prisma.requestLog.findMany({
+      where: filters?.pathPrefix ? { path: { startsWith: filters.pathPrefix } } : undefined,
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
     });
   }
 
-  async count(): Promise<number> {
-    return prisma.requestLog.count();
+  async count(filters?: RequestLogFilters): Promise<number> {
+    return prisma.requestLog.count({
+      where: filters?.pathPrefix ? { path: { startsWith: filters.pathPrefix } } : undefined,
+    });
   }
 }

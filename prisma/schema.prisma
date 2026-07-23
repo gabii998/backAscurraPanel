@@ -446,6 +446,7 @@ model RequestLog {
   method       String
   path         String
   statusCode   Int
+  ipAddress    String?
   requestBody  String?
   responseBody String?
   errorMessage String?

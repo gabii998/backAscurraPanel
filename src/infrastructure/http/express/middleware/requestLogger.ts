@@ -17,10 +17,14 @@ export const buildRequestLoggerMiddleware = (logRepo: RequestLogRepository): Req
     };
 
     res.on("finish", () => {
+      const forwarded = req.headers["x-forwarded-for"];
+      const ipAddress = (typeof forwarded === "string" ? forwarded.split(",")[0]?.trim() : undefined) ?? req.ip ?? null;
+
       logRepo.create({
         method: req.method,
         path: req.originalUrl,
         statusCode: res.statusCode,
+        ipAddress,
         requestBody:
           req.body && typeof req.body === "object" && Object.keys(req.body).length
             ? JSON.stringify(req.body)

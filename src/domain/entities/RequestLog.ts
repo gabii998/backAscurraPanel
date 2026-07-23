@@ -3,6 +3,7 @@ export interface RequestLog {
   method: string;
   path: string;
   statusCode: number;
+  ipAddress: string | null;
   requestBody: string | null;
   responseBody: string | null;
   errorMessage: string | null;

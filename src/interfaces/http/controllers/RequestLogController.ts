@@ -5,9 +5,10 @@ export class RequestLogController {
   constructor(private listRequestLogs: ListRequestLogs) {}
 
   handleList = async (req: Request, res: Response): Promise<void> => {
-    const page  = typeof req.query["page"]  === "string" ? Math.max(1, parseInt(req.query["page"],  10) || 1) : 1;
-    const limit = typeof req.query["limit"] === "string" ? Math.min(200, parseInt(req.query["limit"], 10) || 50) : 50;
-    const result = await this.listRequestLogs.execute(page, limit);
+    const page       = typeof req.query["page"]  === "string" ? Math.max(1, parseInt(req.query["page"],  10) || 1) : 1;
+    const limit      = typeof req.query["limit"] === "string" ? Math.min(200, parseInt(req.query["limit"], 10) || 50) : 50;
+    const pathPrefix = typeof req.query["path"]  === "string" ? req.query["path"].trim() || undefined : undefined;
+    const result = await this.listRequestLogs.execute(page, limit, pathPrefix);
     res.json(result);
   };
 }
