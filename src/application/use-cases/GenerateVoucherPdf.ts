@@ -73,8 +73,9 @@ export class GenerateVoucherPdf {
     const req  = JSON.parse(log.request)  as Record<string, unknown>;
     const res  = JSON.parse(log.response) as Record<string, unknown>;
 
+    const innerRes = res["response"] as Record<string, unknown> | undefined;
     const det = (
-      (res["FeDetResp"] as Record<string, unknown> | undefined)
+      (innerRes?.["FeDetResp"] as Record<string, unknown> | undefined)
         ?.["FECAEDetResponse"] as Record<string, unknown>[] | undefined
     )?.[0] ?? {};
 
