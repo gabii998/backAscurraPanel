@@ -33,8 +33,18 @@ ENV PORT=3000
 ENV APP_VERSION=$APP_VERSION
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl \
+  && apt-get install -y --no-install-recommends \
+     openssl \
+     chromium \
+     fonts-liberation \
   && rm -rf /var/lib/apt/lists/*
+
+# Wrapper that injects sandbox + resource flags into every Puppeteer launch
+RUN printf '#!/bin/sh\nexec /usr/bin/chromium \\\n  --no-sandbox \\\n  --disable-setuid-sandbox \\\n  --disable-dev-shm-usage \\\n  --disable-gpu \\\n  --no-zygote \\\n  --disable-extensions \\\n  "$@"\n' \
+    > /usr/local/bin/chromium-wrapper \
+  && chmod +x /usr/local/bin/chromium-wrapper
+
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium-wrapper
 
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
