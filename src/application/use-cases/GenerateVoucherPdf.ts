@@ -113,7 +113,7 @@ export class GenerateVoucherPdf {
     }));
 
     const docTipo      = Number(req["DocTipo"] ?? 99);
-    const condicionId  = Number(req["CondicionIVAReceptorId"] ?? 5);
+    const condicionId  = docTipo === 99 ? 5 : Number(req["CondicionIVAReceptorId"] ?? 5);
     const receptor: ReceptorData = {
       razonSocial:   input.receptor?.razonSocial ?? (docTipo === 99 ? "Consumidor Final" : ""),
       domicilio:     input.receptor?.domicilio,

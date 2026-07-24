@@ -1,6 +1,6 @@
 import type { ArcaConfigRepository } from "../../domain/repositories/ArcaConfigRepository";
 import type { ArcaLogRepository } from "../../domain/repositories/ArcaLogRepository";
-import { ArcaResponseError, assertArcaResponseOk, formatArcaResponseError } from "../services/ArcaResponseError";
+import { ArcaResponseError, ArcaResponseErrorDetail, assertArcaResponseOk, formatArcaResponseError } from "../services/ArcaResponseError";
 import { ArcaService } from "../../infrastructure/services/ArcaService";
 
 const REQUIRED_FIELDS = [
@@ -24,6 +24,11 @@ function validateVoucher(v: Record<string, unknown>): void {
   const date = new Date(year, month - 1, day);
   if (date.getFullYear() !== year || date.getMonth() + 1 !== month || date.getDate() !== day) {
     throw new Error("VOUCHER_INVALID_DATE");
+  }
+
+  if (v["FchVtoPago"] !== undefined) {
+    const vtopago = String(v["FchVtoPago"]);
+    if (!/^\d{8}$/.test(vtopago) || vtopago < fch) throw new Error("VOUCHER_INVALID_DATE");
   }
 
   const concepto = Number(v["Concepto"]);
@@ -59,7 +64,13 @@ export class CreateArcaVoucher {
 
   async execute(apiKeyId: string, voucher: unknown, idempotencyKey: string): Promise<VoucherResult> {
     const existing = await this.logRepo.findByIdempotencyKey(idempotencyKey);
-    if (existing) return { response: JSON.parse(existing.response), replayed: true };
+    if (existing) {
+      const existingResponse = JSON.parse(existing.response) as Record<string, unknown>;
+      if (String(existingResponse["cae"] ?? "")) {
+        return { response: existingResponse, replayed: true };
+      }
+      // CAE vacío → log de rechazo almacenado incorrectamente; permitir re-emisión
+    }
 
     const config = await this.configRepo.getByApiKeyId(apiKeyId);
     if (!config) throw new Error("ARCA_NOT_CONFIGURED");
@@ -74,7 +85,22 @@ export class CreateArcaVoucher {
 
     try {
       response = await service.billing.createNextVoucher(voucher as never);
-      assertArcaResponseOk(response);
+      assertArcaResponseOk((response as Record<string, unknown>)["response"] ?? response);
+      const caeValue = String((response as Record<string, unknown>)["cae"] ?? "");
+      if (!caeValue) {
+        const afipRes = (response as Record<string, unknown>)["response"] as Record<string, unknown> | undefined;
+        const detArr = (afipRes?.["FeDetResp"] as Record<string, unknown> | undefined)
+          ?.["FECAEDetResponse"] as Record<string, unknown>[] | undefined;
+        const det = detArr?.[0];
+        const obs = (det?.["Observaciones"] as Record<string, unknown> | undefined)?.["Obs"];
+        const detail: ArcaResponseErrorDetail[] = Array.isArray(obs) && obs.length > 0
+          ? obs.map((o) => ({
+              code: Number((o as Record<string, unknown>)["Code"] ?? 0),
+              message: String((o as Record<string, unknown>)["Msg"] ?? ""),
+            }))
+          : [{ code: "AFIP_REJECTED", message: `Resultado: ${String(det?.["Resultado"] ?? "?")}` }];
+        throw new ArcaResponseError(detail);
+      }
     } catch (err) {
       status = "error";
       error = err instanceof ArcaResponseError
