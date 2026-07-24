@@ -115,11 +115,11 @@ export class GenerateVoucherPdf {
     const docTipo      = Number(req["DocTipo"] ?? 99);
     const condicionId  = docTipo === 99 ? 5 : Number(req["CondicionIVAReceptorId"] ?? 5);
     const receptor: ReceptorData = {
-      razonSocial:   input.receptor?.razonSocial ?? (docTipo === 99 ? "Consumidor Final" : ""),
+      razonSocial:   docTipo === 99 ? "" : (input.receptor?.razonSocial ?? ""),
       domicilio:     input.receptor?.domicilio,
       condicionIva:  CONDICION_IVA_DESC[condicionId] ?? String(condicionId),
-      documentoTipo: DOC_TIPO_DESC[docTipo] ?? String(docTipo),
-      documentoNro:  String(req["DocNro"] ?? ""),
+      documentoTipo: docTipo === 99 ? "" : (DOC_TIPO_DESC[docTipo] ?? String(docTipo)),
+      documentoNro:  docTipo === 99 ? "" : String(req["DocNro"] ?? ""),
     };
 
     const generator = new InvoicePdfGenerator(input.options);
