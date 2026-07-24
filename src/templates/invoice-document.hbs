@@ -73,6 +73,7 @@
   .export-footer-row{display:flex;justify-content:space-between;border:1pt solid #000;padding:4px 8px;font-size:7.5pt;margin-bottom:4px}
   .export-footer-left{text-align:left}
   .export-footer-right{text-align:right;font-style:italic}
+  .periodo-box{display:flex;gap:24px;border:1pt solid #000;padding:4px 8px;margin-bottom:4px;font-size:8pt}
 </style>
 </head>
 <body>
@@ -138,11 +139,15 @@
   {{/if}}
   {{else}}
   <div class="receptor">
-    {{#if (and (gte data.concepto 2) (and data.fechaServicioDesde data.fechaServicioHasta))}}
-    <div class="receptor-row"><b>Período facturado:</b> {{formatDate data.fechaServicioDesde}} al {{formatDate data.fechaServicioHasta}}</div>
-    {{/if}}
-    {{#if data.fechaVtoPago}}
-    <div class="receptor-row"><b>Fecha de vencimiento para el pago:</b> {{formatDate data.fechaVtoPago}}</div>
+    {{#if (or (and (gte data.concepto 2) (and data.fechaServicioDesde data.fechaServicioHasta)) data.fechaVtoPago)}}
+    <div class="periodo-box">
+      {{#if (and (gte data.concepto 2) (and data.fechaServicioDesde data.fechaServicioHasta))}}
+      <span><b>Período facturado:</b> {{formatDate data.fechaServicioDesde}} al {{formatDate data.fechaServicioHasta}}</span>
+      {{/if}}
+      {{#if data.fechaVtoPago}}
+      <span><b>Fecha de vto. para el pago:</b> {{formatDate data.fechaVtoPago}}</span>
+      {{/if}}
+    </div>
     {{/if}}
     <div class="receptor-row"><b>Apellido y nombre / Razón Social:</b> {{data.receptor.razonSocial}}</div>
     <div class="receptor-row"><b>Domicilio:</b> {{default data.receptor.domicilio "- -"}}</div>
