@@ -1,4 +1,5 @@
 import { readFileSync } from "fs";
+import { join } from "path";
 import { InvoicePdfGenerator, VOUCHER_TYPE_LETTER } from "@arcasdk/pdf";
 import type {
   EmisorData,
@@ -12,24 +13,10 @@ import type {
 import type { ArcaConfigRepository } from "../../domain/repositories/ArcaConfigRepository";
 import type { ArcaLogRepository } from "../../domain/repositories/ArcaLogRepository";
 
-let patchedTemplate: string | undefined;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const templatePath = (require as NodeRequire).resolve(
-    "@arcasdk/pdf/lib/templates/arca-default/invoice-document.hbs"
-  );
-  patchedTemplate = readFileSync(templatePath, "utf-8")
-    .replace(
-      '<div class="receptor-row"><b>Apellido y nombre / Razón Social:</b> {{data.receptor.razonSocial}}</div>',
-      '{{#if data.receptor.razonSocial}}<div class="receptor-row"><b>Apellido y nombre / Razón Social:</b> {{data.receptor.razonSocial}}</div>{{/if}}'
-    )
-    .replace(
-      '<div class="receptor-row"><b>{{data.receptor.documentoTipo}}:</b> {{docNumber data.receptor.documentoNro}}&nbsp;&nbsp;&nbsp;&nbsp;<b>Condición frente al IVA:</b>',
-      '<div class="receptor-row">{{#if data.receptor.documentoTipo}}<b>{{data.receptor.documentoTipo}}:</b> {{docNumber data.receptor.documentoNro}}&nbsp;&nbsp;&nbsp;&nbsp;{{/if}}<b>Condición frente al IVA:</b>'
-    );
-} catch {
-  // Fallback: el generador usa su template por defecto
-}
+const customTemplate = readFileSync(
+  join(__dirname, "../../templates/invoice-document.hbs"),
+  "utf-8"
+);
 
 const IVA_DESC: Record<number, string> = {
   3: "0%",
@@ -142,9 +129,7 @@ export class GenerateVoucherPdf {
       documentoNro:  docTipo === 99 ? "" : String(req["DocNro"] ?? ""),
     };
 
-    const generatorOptions = patchedTemplate
-      ? { ...(input.options ?? {}), template: patchedTemplate }
-      : input.options;
+    const generatorOptions = { ...(input.options ?? {}), template: customTemplate };
     const generator = new InvoicePdfGenerator(generatorOptions);
     return generator.generate({
       emisor:              input.emisor,
