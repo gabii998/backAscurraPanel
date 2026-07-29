@@ -353,6 +353,8 @@ model MercadoPagoConfig {
   name           String           @unique
   accessToken    String
   publicKey      String
+  mercadoPagoWebhookSecret String @default("")
+  webhookSecret  String           @default("")
   webhookUrl     String           @default("")
   backUrlSuccess String           @default("")
   backUrlFailure String           @default("")
@@ -374,6 +376,11 @@ model MercadoPagoLog {
   status            String            @default("pending")
   amount            Float             @default(0)
   currency          String            @default("ARS")
+  request           Json?
+  response          Json?
+  webhookPayload    Json?
+  forwardStatusCode Int?
+  forwardResponse   String            @default("")
   error             String            @default("")
   updatedAt         DateTime          @updatedAt
   createdAt         DateTime          @default(now())

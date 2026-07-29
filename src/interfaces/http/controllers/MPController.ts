@@ -23,7 +23,7 @@ export class MPController {
 
   // ── Public (API key) ──────────────────────────────────
   handleCreatePreference = async (req: Request, res: Response): Promise<void> => {
-    const { items, external_reference } = req.body as Record<string, unknown>;
+    const { items, external_reference, payer_email } = req.body as Record<string, unknown>;
     const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
 
     try {
@@ -31,12 +31,14 @@ export class MPController {
         apiKeyId,
         items:             Array.isArray(items) ? items as never : [],
         externalReference: typeof external_reference === "string" ? external_reference : undefined,
+        payerEmail:        typeof payer_email === "string" ? payer_email : undefined,
       });
       res.status(201).json(result);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
       if (err.message === "MISSING_CONFIG")         { res.status(400).json({ message: err.message }); return; }
       if (err.message === "MISSING_ITEMS")          { res.status(400).json({ message: err.message }); return; }
+      if (err.message === "INVALID_ITEMS")          { res.status(400).json({ message: err.message }); return; }
       if (err.message === "CONFIG_NOT_FOUND")       { res.status(404).json({ message: err.message }); return; }
       if (err.message === "MP_PREFERENCE_FAILED")   { res.status(502).json({ message: err.message }); return; }
       throw err;
@@ -61,25 +63,46 @@ export class MPController {
 
   // ── Webhook (no auth — called by MercadoPago) ─────────
   handleWebhook = async (req: Request, res: Response): Promise<void> => {
-    // Respond immediately — MP requires a fast 200
-    res.status(200).end();
-
     const { configName } = req.params;
     const body = req.body as Record<string, unknown>;
 
     // MP sends two notification formats:
     // Old IPN: { topic: "payment", id: "123" }
     // New webhooks: { type: "payment", action: "payment.updated", data: { id: "123" } }
-    const topic  = typeof body["topic"] === "string" ? body["topic"] : undefined;
-    const type   = typeof body["type"]  === "string" ? body["type"]  : undefined;
-    const dataId = typeof (body["data"] as Record<string, unknown> | undefined)?.["id"] === "string"
-      ? String((body["data"] as Record<string, unknown>)["id"])
-      : typeof body["id"] === "string" ? body["id"] : undefined;
+    const query = req.query as Record<string, unknown>;
+    const topic  = this.getText(body["topic"]) ?? this.getText(query["topic"]);
+    const type   = this.getText(body["type"])  ?? this.getText(query["type"]);
+    const dataId = this.getText((body["data"] as Record<string, unknown> | undefined)?.["id"]) ??
+      this.getText(body["id"]) ??
+      this.getText(query["data.id"]) ??
+      this.getText(query["id"]);
 
-    await this.handleMPWebhook.execute({ configName, topic, type, dataId, rawBody: body }).catch(() => {
-      // webhook processing errors are non-fatal
-    });
+    try {
+      await this.handleMPWebhook.execute({
+        configName,
+        topic,
+        type,
+        dataId,
+        xSignature: req.headers["x-signature"] as string | string[] | undefined,
+        xRequestId: req.headers["x-request-id"] as string | string[] | undefined,
+        rawBody: body
+      });
+      res.status(200).end();
+    } catch (error) {
+      if (error instanceof Error && error.message === "INVALID_MP_WEBHOOK_SIGNATURE") {
+        res.status(401).end();
+        return;
+      }
+      // Processing errors are non-fatal after the notification is accepted.
+      res.status(200).end();
+    }
   };
+
+  private getText(value: unknown): string | undefined {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    return undefined;
+  }
 
   // ── Configs (JWT + admin) ─────────────────────────────
   handleListConfigs = async (_req: Request, res: Response): Promise<void> => {
@@ -88,12 +111,14 @@ export class MPController {
   };
 
   handleCreateConfig = async (req: Request, res: Response): Promise<void> => {
-    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending, apiKeyId } = req.body as Record<string, unknown>;
+    const { name, accessToken, publicKey, mercadoPagoWebhookSecret, webhookSecret, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending, apiKeyId } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.createMPConfig.execute({
         name:          typeof name === "string" ? name : "",
         accessToken:   typeof accessToken === "string" ? accessToken : "",
         publicKey:     typeof publicKey === "string" ? publicKey : "",
+        mercadoPagoWebhookSecret: typeof mercadoPagoWebhookSecret === "string" ? mercadoPagoWebhookSecret : "",
+        webhookSecret: typeof webhookSecret === "string" ? webhookSecret : "",
         webhookUrl:    typeof webhookUrl === "string" ? webhookUrl : "",
         backUrlSuccess: typeof backUrlSuccess === "string" ? backUrlSuccess : "",
         backUrlFailure: typeof backUrlFailure === "string" ? backUrlFailure : "",
@@ -111,12 +136,14 @@ export class MPController {
 
   handleUpdateConfig = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, accessToken, publicKey, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending, apiKeyId } = req.body as Record<string, unknown>;
+    const { name, accessToken, publicKey, mercadoPagoWebhookSecret, webhookSecret, webhookUrl, backUrlSuccess, backUrlFailure, backUrlPending, apiKeyId } = req.body as Record<string, unknown>;
     try {
       const cfg = await this.updateMPConfig.execute(id, {
         ...(typeof name === "string" && { name }),
         ...(typeof accessToken === "string" && accessToken && { accessToken }),
         ...(typeof publicKey === "string" && { publicKey }),
+        ...(typeof mercadoPagoWebhookSecret === "string" && { mercadoPagoWebhookSecret }),
+        ...(typeof webhookSecret === "string" && { webhookSecret }),
         ...(typeof webhookUrl === "string" && { webhookUrl }),
         ...(typeof backUrlSuccess === "string" && { backUrlSuccess }),
         ...(typeof backUrlFailure === "string" && { backUrlFailure }),

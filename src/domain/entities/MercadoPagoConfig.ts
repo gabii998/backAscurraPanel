@@ -3,6 +3,8 @@ export interface MercadoPagoConfig {
   name: string;
   accessToken: string;
   publicKey: string;
+  mercadoPagoWebhookSecret: string;
+  webhookSecret: string;
   webhookUrl: string;
   backUrlSuccess: string;
   backUrlFailure: string;

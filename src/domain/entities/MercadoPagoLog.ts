@@ -8,6 +8,11 @@ export interface MercadoPagoLog {
   status: string;
   amount: number;
   currency: string;
+  request?: unknown;
+  response?: unknown;
+  webhookPayload?: unknown;
+  forwardStatusCode?: number | null;
+  forwardResponse: string;
   error: string;
   updatedAt: Date;
   createdAt: Date;

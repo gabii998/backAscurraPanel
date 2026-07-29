@@ -15,6 +15,7 @@ export interface CreateMPPreferenceInput {
   apiKeyId: string;
   items: MPItem[];
   externalReference?: string;
+  payerEmail?: string;
 }
 
 export interface CreateMPPreferenceOutput {
@@ -31,34 +32,32 @@ export class CreateMPPreference {
 
   async execute(input: CreateMPPreferenceInput): Promise<CreateMPPreferenceOutput> {
     if (!input.items?.length) throw new Error("MISSING_ITEMS");
+    const items = input.items.map((item, idx) => this.normalizeItem(item, idx));
+    const amount = items.reduce((acc, item) => acc + item.quantity * item.unit_price, 0);
 
     const config = await this.configRepo.getByApiKeyId(input.apiKeyId);
     if (!config) throw new Error("CONFIG_NOT_FOUND");
 
     const client = new MercadoPagoClient(config.accessToken);
     const notificationUrl = `${env.apiUrl}/mp/webhook/${config.name}`;
+    const preferenceRequest = {
+      items,
+      external_reference: input.externalReference ?? "",
+      notification_url:   notificationUrl,
+      ...(input.payerEmail && { payer: { email: input.payerEmail } }),
+      ...((config.backUrlSuccess || config.backUrlFailure || config.backUrlPending) && {
+        back_urls: {
+          success: config.backUrlSuccess || undefined,
+          failure: config.backUrlFailure || undefined,
+          pending: config.backUrlPending || undefined,
+        },
+        auto_return: "approved" as const,
+      }),
+    };
 
     let preference;
     try {
-      preference = await client.createPreference({
-        items: input.items.map((i, idx) => ({
-          id:          i.id ?? String(idx + 1),
-          title:       i.title,
-          quantity:    i.quantity,
-          unit_price:  i.unit_price,
-          currency_id: i.currency_id ?? "ARS",
-        })),
-        external_reference: input.externalReference ?? "",
-        notification_url:   notificationUrl,
-        ...((config.backUrlSuccess || config.backUrlFailure || config.backUrlPending) && {
-          back_urls: {
-            success: config.backUrlSuccess || undefined,
-            failure: config.backUrlFailure || undefined,
-            pending: config.backUrlPending || undefined,
-          },
-          auto_return: "approved" as const,
-        }),
-      });
+      preference = await client.createPreference(preferenceRequest);
     } catch (err) {
       await this.logRepo.create({
         configId:          config.id,
@@ -67,8 +66,13 @@ export class CreateMPPreference {
         paymentId:         "",
         checkoutUrl:       "",
         status:            "error",
-        amount:            0,
+        amount,
         currency:          "ARS",
+        request:           preferenceRequest,
+        response:          null,
+        webhookPayload:    null,
+        forwardStatusCode: null,
+        forwardResponse:   "",
         error:             err instanceof Error ? err.message : String(err),
       });
       throw new Error("MP_PREFERENCE_FAILED");
@@ -84,8 +88,13 @@ export class CreateMPPreference {
       paymentId:         "",
       checkoutUrl,
       status:            "pending",
-      amount:            0,
+      amount,
       currency:          "ARS",
+      request:           preferenceRequest,
+      response:          preference,
+      webhookPayload:    null,
+      forwardStatusCode: null,
+      forwardResponse:   "",
       error:             "",
     });
 
@@ -93,6 +102,30 @@ export class CreateMPPreference {
       preference_id:        preference.id ?? "",
       checkout_url:         checkoutUrl,
       sandbox_checkout_url: sandboxCheckoutUrl,
+    };
+  }
+
+  private normalizeItem(item: MPItem, idx: number): Required<MPItem> {
+    const title = typeof item.title === "string" ? item.title.trim() : "";
+    const quantity = Number(item.quantity);
+    const unitPrice = Number(item.unit_price);
+    const currencyId = typeof item.currency_id === "string" && item.currency_id.trim()
+      ? item.currency_id.trim()
+      : "ARS";
+
+    if (!title || !Number.isFinite(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+      throw new Error("INVALID_ITEMS");
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new Error("INVALID_ITEMS");
+    }
+
+    return {
+      id: item.id ?? String(idx + 1),
+      title,
+      quantity,
+      unit_price: unitPrice,
+      currency_id: currencyId,
     };
   }
 }

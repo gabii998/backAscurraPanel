@@ -6,12 +6,12 @@ export class UpdateMPConfig {
 
   async execute(
     id: string,
-    data: { name?: string; accessToken?: string; publicKey?: string; webhookUrl?: string; backUrlSuccess?: string; backUrlFailure?: string; backUrlPending?: string; apiKeyId?: string | null },
-  ): Promise<Omit<MercadoPagoConfig, "accessToken">> {
+    data: { name?: string; accessToken?: string; publicKey?: string; mercadoPagoWebhookSecret?: string; webhookSecret?: string; webhookUrl?: string; backUrlSuccess?: string; backUrlFailure?: string; backUrlPending?: string; apiKeyId?: string | null },
+  ): Promise<Omit<MercadoPagoConfig, "accessToken" | "mercadoPagoWebhookSecret" | "webhookSecret">> {
     const existing = await this.repo.getById(id);
     if (!existing) throw new Error("CONFIG_NOT_FOUND");
     const cfg = await this.repo.update(id, data);
-    const { accessToken: _, ...rest } = cfg;
+    const { accessToken: _, mercadoPagoWebhookSecret: _mpSecret, webhookSecret: _secret, ...rest } = cfg;
     return rest;
   }
 }
