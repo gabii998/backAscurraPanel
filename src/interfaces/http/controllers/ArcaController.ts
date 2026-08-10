@@ -11,6 +11,7 @@ import type { GetArcaTaxpayer } from "../../../application/use-cases/GetArcaTaxp
 import type { ListArcaLogs } from "../../../application/use-cases/ListArcaLogs";
 import type { NotifyArcaCertExpiry } from "../../../application/use-cases/NotifyArcaCertExpiry";
 import type { GenerateVoucherPdf } from "../../../application/use-cases/GenerateVoucherPdf";
+import type { RefreshArcaTicket } from "../../../application/use-cases/RefreshArcaTicket";
 import { ArcaResponseError } from "../../../application/services/ArcaResponseError";
 import type { ApiKeyRequest } from "../../../infrastructure/http/express/middleware/ingestKeyMiddleware";
 
@@ -28,6 +29,7 @@ export class ArcaController {
     private listArcaLogs:              ListArcaLogs,
     private notifyArcaCertExpiry:      NotifyArcaCertExpiry,
     private generateVoucherPdf:        GenerateVoucherPdf,
+    private refreshArcaTicket:         RefreshArcaTicket,
   ) {}
 
   // ── Configs (JWT + admin) ─────────────────────────────
@@ -110,6 +112,18 @@ export class ArcaController {
     const { apiKeyId } = req.params;
     await this.unassignApiKeyFromArcaConfig.execute(apiKeyId);
     res.status(204).end();
+  };
+
+  handleRefreshTicket = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ticket = await this.refreshArcaTicket.execute(req.params["id"]);
+      res.json({ service: ticket.service, expiresAt: ticket.expiresAt.toISOString() });
+    } catch (err) {
+      if (!(err instanceof Error)) throw err;
+      if (err.message === "ARCA_CONFIG_NOT_FOUND")       { res.status(404).json({ message: err.message }); return; }
+      if (err.message === "ARCA_TICKET_REFRESH_FAILED") { res.status(502).json({ message: err.message }); return; }
+      throw err;
+    }
   };
 
   // ── Logs (JWT) ────────────────────────────────────────

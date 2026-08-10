@@ -1940,6 +1940,25 @@ export const openApiSpec = {
         },
       },
     },
+    "/arca/configs/{id}/refresh-ticket": {
+      post: {
+        tags: ["arca"],
+        summary: "Regenerar el TA de WSFE (admin)",
+        description: "Elimina los tickets cacheados de la configuración y solicita inmediatamente un nuevo Ticket de Acceso para WSFE.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": {
+            description: "TA de WSFE regenerado",
+            content: { "application/json": { schema: { type: "object", properties: { service: { type: "string", example: "wsfe" }, expiresAt: { type: "string", format: "date-time" } }, required: ["service", "expiresAt"] } } },
+          },
+          "401": { description: "No autenticado" },
+          "403": { description: "Sin permisos de admin" },
+          "404": { description: "Configuración no encontrada" },
+          "502": { description: "No se pudo renovar el TA en ARCA" },
+        },
+      },
+    },
     "/arca/configs/{id}/assign-key/{apiKeyId}": {
       delete: {
         tags: ["arca"],

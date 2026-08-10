@@ -19,6 +19,7 @@ export const buildArcaRoutes = (
   // API key assignment — JWT + admin
   router.post("/arca/configs/:id/assign-key",              authMiddleware, requireRole("admin"), wrapRequestHandler(controller.handleAssignApiKey.bind(controller)));
   router.delete("/arca/configs/:id/assign-key/:apiKeyId",  authMiddleware, requireRole("admin"), wrapRequestHandler(controller.handleUnassignApiKey.bind(controller)));
+  router.post("/arca/configs/:id/refresh-ticket",          authMiddleware, requireRole("admin"), wrapRequestHandler(controller.handleRefreshTicket.bind(controller)));
 
   // Logs — JWT
   router.get("/arca/configs/:configId/logs", authMiddleware, wrapRequestHandler(controller.handleListLogs.bind(controller)));
