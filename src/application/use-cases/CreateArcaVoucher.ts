@@ -141,7 +141,7 @@ export class CreateArcaVoucher {
       throw arcaError;
     }
 
-    await this.logRepo.update(log.id, { response: JSON.stringify(response), status: "OK", error: "", durationMs: Date.now() - start });
+    await this.logRepo.update(log.id, { response: JSON.stringify(response), status: "ok", error: "", durationMs: Date.now() - start });
 
     return { response, replayed: false };
   }
