@@ -43,7 +43,7 @@ export class GetArcaSalesPoints {
       response = response ?? { error };
       try {
         await this.logRepo.create({
-          configId: config.id, service: "wsfe", method: "getSalesPoints",
+          configId: config.id, emisorCuit: cuit, service: "wsfe", method: "getSalesPoints",
           request: JSON.stringify({ cuit }), response: JSON.stringify(response),
           status, error, durationMs: Date.now() - start, idempotencyKey: null,
         });
@@ -56,7 +56,7 @@ export class GetArcaSalesPoints {
 
     try {
       await this.logRepo.create({
-        configId: config.id, service: "wsfe", method: "getSalesPoints",
+        configId: config.id, emisorCuit: cuit, service: "wsfe", method: "getSalesPoints",
         request: JSON.stringify({ cuit }), response: JSON.stringify(response),
         status, error, durationMs: Date.now() - start, idempotencyKey: null,
       });

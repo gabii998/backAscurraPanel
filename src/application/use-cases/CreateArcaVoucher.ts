@@ -62,23 +62,38 @@ export class CreateArcaVoucher {
     private logRepo: ArcaLogRepository,
   ) {}
 
-  async execute(apiKeyId: string, voucher: unknown, idempotencyKey: string): Promise<VoucherResult> {
-    const existing = await this.logRepo.findByIdempotencyKey(idempotencyKey);
-    if (existing) {
-      const existingResponse = JSON.parse(existing.response) as Record<string, unknown>;
-      if (String(existingResponse["cae"] ?? "")) {
-        return { response: existingResponse, replayed: true };
-      }
-      // CAE vacío → log de rechazo almacenado incorrectamente; permitir re-emisión
-    }
-
+  async execute(
+    apiKeyId: string,
+    voucher: unknown,
+    idempotencyKey: string,
+    emisorCuit: string
+  ): Promise<VoucherResult> {
     const config = await this.configRepo.getByApiKeyId(apiKeyId);
     if (!config) throw new Error("ARCA_NOT_CONFIGURED");
+    const effectiveEmisorCuit = emisorCuit.replace(/\D/g, "");
+    if (!/^\d{11}$/.test(effectiveEmisorCuit)) throw new Error("EMISOR_CUIT_REQUIRED");
+
+    const existing = await this.logRepo.findByIdempotencyKey(config.id, effectiveEmisorCuit, idempotencyKey);
+    if (existing) {
+      const existingResponse = JSON.parse(existing.response) as Record<string, unknown>;
+      if (String(existingResponse["cae"] ?? existingResponse["CAE"] ?? "")) {
+        return { response: existingResponse, replayed: true };
+      }
+      if (existing.status === "PENDING") throw new Error("ARCA_VOUCHER_PENDING_RECONCILIATION");
+      throw new Error("ARCA_VOUCHER_ALREADY_REJECTED");
+    }
 
     validateVoucher(voucher as Record<string, unknown>);
 
-    const service = new ArcaService({ ...config, configId: config.id });
+    // WSFEv1 autentica con el CUIT del contribuyente emisor o representado.
+    // Fuente oficial: https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf
+    const service = new ArcaService({ ...config, cuit: effectiveEmisorCuit, configId: config.id });
     const start = Date.now();
+    const log = await this.logRepo.create({
+      configId: config.id, emisorCuit: effectiveEmisorCuit, service: "wsfe", method: "createNextVoucher",
+      request: JSON.stringify({ emisorCuit: effectiveEmisorCuit, voucher }), response: JSON.stringify({ pending: true }),
+      status: "PENDING", error: "", durationMs: 0, idempotencyKey,
+    });
     let response: unknown;
     let status = "ok";
     let error = "";
@@ -86,7 +101,11 @@ export class CreateArcaVoucher {
     try {
       response = await service.billing.createNextVoucher(voucher as never);
       assertArcaResponseOk((response as Record<string, unknown>)["response"] ?? response);
-      const caeValue = String((response as Record<string, unknown>)["cae"] ?? "");
+      const caeValue = String(
+        (response as Record<string, unknown>)["cae"]
+          ?? (response as Record<string, unknown>)["CAE"]
+          ?? ""
+      );
       if (!caeValue) {
         const afipRes = (response as Record<string, unknown>)["response"] as Record<string, unknown> | undefined;
         const detArr = (afipRes?.["FeDetResp"] as Record<string, unknown> | undefined)
@@ -110,32 +129,19 @@ export class CreateArcaVoucher {
       if (!(err instanceof ArcaResponseError)) {
         console.error("[ArcaVoucher] SDK error in createNextVoucher:", err);
       }
-      try {
-        await this.logRepo.create({
-          configId: config.id, service: "wsfe", method: "createNextVoucher",
-          request: JSON.stringify(voucher), response: JSON.stringify(response),
-          status, error, durationMs: Date.now() - start,
-          idempotencyKey: null,
-        });
-      } catch (logErr) {
-        console.error("[ArcaLog] Failed to write error log:", logErr);
-      }
+      await this.logRepo.update(log.id, {
+        response: JSON.stringify(response),
+        status: err instanceof ArcaResponseError ? "REJECTED" : "PENDING",
+        error,
+        durationMs: Date.now() - start,
+      });
       if (err instanceof ArcaResponseError) throw err;
       const arcaError = new Error("ARCA_VOUCHER_FAILED");
       (arcaError as Error & { detail: string }).detail = error;
       throw arcaError;
     }
 
-    try {
-      await this.logRepo.create({
-        configId: config.id, service: "wsfe", method: "createNextVoucher",
-        request: JSON.stringify(voucher), response: JSON.stringify(response),
-        status, error, durationMs: Date.now() - start,
-        idempotencyKey,
-      });
-    } catch (logErr) {
-      console.error("[ArcaLog] Failed to write success log:", logErr);
-    }
+    await this.logRepo.update(log.id, { response: JSON.stringify(response), status: "OK", error: "", durationMs: Date.now() - start });
 
     return { response, replayed: false };
   }

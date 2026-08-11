@@ -73,9 +73,10 @@ export class GenerateVoucherPdf {
     const config = await this.configRepo.getByApiKeyId(input.apiKeyId);
     if (!config) throw new Error("ARCA_NOT_CONFIGURED");
 
-    const log = await this.logRepo.findByIdempotencyKey(input.idempotencyKey);
+    const emisorCuit = String((input.emisor as unknown as Record<string, unknown>)["cuit"] ?? "").replace(/\D/g, "");
+    const log = await this.logRepo.findByIdempotencyKey(config.id, emisorCuit, input.idempotencyKey);
     if (!log || log.configId !== config.id) throw new Error("VOUCHER_NOT_FOUND");
-    if (log.status !== "ok") throw new Error("VOUCHER_FAILED");
+    if (log.status !== "OK") throw new Error("VOUCHER_FAILED");
 
     const req  = JSON.parse(log.request)  as Record<string, unknown>;
     const res  = JSON.parse(log.response) as Record<string, unknown>;

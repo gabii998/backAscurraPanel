@@ -333,19 +333,22 @@ model ArcaConfigApiKey {
 model ArcaLog {
   id             String     @id @default(uuid())
   configId       String
+  emisorCuit     String
   config         ArcaConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
   service        String
   method         String
   request        String
   response       String
-  status         String     @default("ok")
+  status         String     @default("PENDING")
   error          String     @default("")
   durationMs     Int        @default(0)
-  idempotencyKey String?    @unique
+  idempotencyKey String?
   updatedAt      DateTime   @updatedAt
   createdAt      DateTime   @default(now())
 
   @@index([configId, createdAt(sort: Desc)])
+  @@index([configId, emisorCuit, idempotencyKey])
+  @@unique([configId, emisorCuit, idempotencyKey])
 }
 
 model MercadoPagoConfig {

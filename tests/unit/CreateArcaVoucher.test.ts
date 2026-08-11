@@ -70,6 +70,18 @@ const makeLogRepo = (overrides: Partial<ArcaLogRepository> = {}): ArcaLogReposit
 });
 
 describe("CreateArcaVoucher", () => {
+  it("uses the requested emitter CUIT instead of the central config CUIT", async () => {
+    const { ArcaService } = require("../../src/infrastructure/services/ArcaService");
+    const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
+
+    await uc.execute("key-1", validVoucher, "emisor-guid", "30712345678");
+
+    expect(ArcaService).toHaveBeenCalledWith(expect.objectContaining({
+      cuit: "30712345678",
+      configId: "cfg-1",
+    }));
+  });
+
   describe("idempotency", () => {
     it("returns cached response without calling ARCA when key already exists", async () => {
       const { ArcaService } = require("../../src/infrastructure/services/ArcaService");
@@ -83,6 +95,11 @@ describe("CreateArcaVoucher", () => {
       expect(result.replayed).toBe(true);
       expect(result.response).toEqual({ CAE: "12345678901234" });
       expect(arcaMock).not.toHaveBeenCalled();
+      // El mock one-shot no se consume en un replay: restaurar el comportamiento
+      // predeterminado para la siguiente prueba que sí crea el servicio.
+      (ArcaService as jest.Mock).mockReset().mockImplementation(() => ({
+        billing: { createNextVoucher: jest.fn().mockResolvedValue({ CAE: "12345678901234" }) },
+      }));
     });
 
     it("does not create a new log on replay", async () => {

@@ -20,7 +20,11 @@ export class PrismaArcaLogRepository implements ArcaLogRepository {
     return prisma.arcaLog.count({ where: { configId } });
   }
 
-  async findByIdempotencyKey(key: string): Promise<ArcaLog | null> {
-    return prisma.arcaLog.findUnique({ where: { idempotencyKey: key } });
+  async findByIdempotencyKey(configId: string, emisorCuit: string, key: string): Promise<ArcaLog | null> {
+    return prisma.arcaLog.findUnique({ where: { configId_emisorCuit_idempotencyKey: { configId, emisorCuit, idempotencyKey: key } } });
+  }
+
+  async update(id: string, data: Pick<ArcaLog, "response" | "status" | "error" | "durationMs">): Promise<ArcaLog> {
+    return prisma.arcaLog.update({ where: { id }, data });
   }
 }

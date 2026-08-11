@@ -30,7 +30,7 @@ export class GetArcaTaxpayer {
       response = response ?? { error };
       try {
         await this.logRepo.create({
-          configId: config.id, service: "padron", method: "getTaxpayerDetails",
+          configId: config.id, emisorCuit: config.cuit, service: "padron", method: "getTaxpayerDetails",
           request: JSON.stringify({ identifier }), response: JSON.stringify(response),
           status, error, durationMs: Date.now() - start, idempotencyKey: null,
         });
@@ -43,7 +43,7 @@ export class GetArcaTaxpayer {
 
     try {
       await this.logRepo.create({
-        configId: config.id, service: "padron", method: "getTaxpayerDetails",
+        configId: config.id, emisorCuit: config.cuit, service: "padron", method: "getTaxpayerDetails",
         request: JSON.stringify({ identifier }), response: JSON.stringify(response),
         status, error, durationMs: Date.now() - start, idempotencyKey: null,
       });

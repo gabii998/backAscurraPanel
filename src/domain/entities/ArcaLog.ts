@@ -1,6 +1,7 @@
 export interface ArcaLog {
   id: string;
   configId: string;
+  emisorCuit: string;
   service: string;
   method: string;
   request: string;

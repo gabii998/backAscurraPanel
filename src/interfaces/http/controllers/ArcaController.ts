@@ -140,7 +140,7 @@ export class ArcaController {
 
   handleCreateVoucher = async (req: Request, res: Response): Promise<void> => {
     const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
-    const { voucher, idempotencyKey } = req.body as Record<string, unknown>;
+    const { voucher, idempotencyKey, emisorCuit } = req.body as Record<string, unknown>;
     if (!idempotencyKey || typeof idempotencyKey !== "string") {
       res.status(400).json({ message: "IDEMPOTENCY_KEY_REQUIRED" });
       return;
@@ -149,8 +149,20 @@ export class ArcaController {
       res.status(400).json({ message: "VOUCHER_REQUIRED" });
       return;
     }
+    const normalizedEmisorCuit = typeof emisorCuit === "string"
+      ? emisorCuit.replace(/\D/g, "")
+      : "";
+    if (!/^\d{11}$/.test(normalizedEmisorCuit)) {
+      res.status(400).json({ message: "EMISOR_CUIT_REQUIRED" });
+      return;
+    }
     try {
-      const { response, replayed } = await this.createArcaVoucher.execute(apiKeyId, voucher, idempotencyKey);
+      const { response, replayed } = await this.createArcaVoucher.execute(
+        apiKeyId,
+        voucher,
+        idempotencyKey,
+        normalizedEmisorCuit
+      );
       if (replayed) {
         res.setHeader("Idempotency-Replayed", "true");
         res.status(200).json(response);
