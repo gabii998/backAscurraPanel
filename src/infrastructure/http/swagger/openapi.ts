@@ -1696,6 +1696,38 @@ export const openApiSpec = {
         },
       },
     },
+    "/mp/payment/by-reference/{externalReference}": {
+      get: {
+        tags: ["mercadopago"],
+        summary: "Obtener estado de pago por referencia externa (API key)",
+        security: [{ apiKey: [] }],
+        parameters: [
+          { name: "externalReference", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": {
+            description: "Estado canónico disponible del pago",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    status: { type: "string" },
+                    status_detail: { type: "string" },
+                    external_reference: { type: "string" },
+                    transaction_amount: { type: "number" },
+                    currency_id: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          "401": { description: "API key inválida" },
+          "404": { description: "Pago o configuración no encontrados", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } } },
+        },
+      },
+    },
     "/mp/webhook/{configName}": {
       post: {
         tags: ["mercadopago"],

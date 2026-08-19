@@ -116,6 +116,7 @@ import { buildCompanionRoutes } from "./routes/companionRoutes";
 import { CreateMPPreference } from "../../../application/use-cases/CreateMPPreference";
 import { GetMPPayment } from "../../../application/use-cases/GetMPPayment";
 import { HandleMPWebhook } from "../../../application/use-cases/HandleMPWebhook";
+import { GetMPPaymentByReference } from "../../../application/use-cases/GetMPPaymentByReference";
 import { ListMPConfigs } from "../../../application/use-cases/ListMPConfigs";
 import { CreateMPConfig } from "../../../application/use-cases/CreateMPConfig";
 import { UpdateMPConfig } from "../../../application/use-cases/UpdateMPConfig";
@@ -369,13 +370,14 @@ export const buildServer = (): Express => {
   // MercadoPago use cases + controller
   const createMPPreference = new CreateMPPreference(mpConfigRepository, mpLogRepository);
   const getMPPayment       = new GetMPPayment(mpConfigRepository);
-  const handleMPWebhook    = new HandleMPWebhook(mpConfigRepository, mpLogRepository);
+  const handleMPWebhook    = new HandleMPWebhook(mpConfigRepository, mpLogRepository, ingestError);
+  const getMPPaymentByReference = new GetMPPaymentByReference(mpConfigRepository, mpLogRepository);
   const listMPConfigs      = new ListMPConfigs(mpConfigRepository);
   const createMPConfig     = new CreateMPConfig(mpConfigRepository);
   const updateMPConfig     = new UpdateMPConfig(mpConfigRepository);
   const deleteMPConfig     = new DeleteMPConfig(mpConfigRepository);
   const listMPLogs         = new ListMPLogs(mpLogRepository);
-  const mpController       = new MPController(createMPPreference, getMPPayment, handleMPWebhook, listMPConfigs, createMPConfig, updateMPConfig, deleteMPConfig, listMPLogs);
+  const mpController       = new MPController(createMPPreference, getMPPayment, handleMPWebhook, getMPPaymentByReference, listMPConfigs, createMPConfig, updateMPConfig, deleteMPConfig, listMPLogs);
 
   // ARCA use cases + controller
   const createArcaConfig          = new CreateArcaConfig(arcaConfigRepository);

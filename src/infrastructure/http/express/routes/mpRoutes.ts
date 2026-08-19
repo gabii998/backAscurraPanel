@@ -13,6 +13,7 @@ export const buildMPRoutes = (
   // Pública — API key
   router.post("/mp/pay",                   ingestKeyMiddleware, wrapRequestHandler(controller.handleCreatePreference.bind(controller)));
   router.get("/mp/payment/:paymentId",     ingestKeyMiddleware, wrapRequestHandler(controller.handleGetPayment.bind(controller)));
+  router.get("/mp/payment/by-reference/:externalReference", ingestKeyMiddleware, wrapRequestHandler(controller.handleGetPaymentByReference.bind(controller)));
 
   // Webhook de MercadoPago — sin auth
   router.post("/mp/webhook/:configName", wrapRequestHandler(controller.handleWebhook.bind(controller)));

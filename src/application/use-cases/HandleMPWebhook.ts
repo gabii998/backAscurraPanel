@@ -2,6 +2,7 @@ import { InvalidWebhookSignatureError, WebhookSignatureValidator } from "mercado
 import type { MercadoPagoConfigRepository } from "../../domain/repositories/MercadoPagoConfigRepository";
 import type { MercadoPagoLogRepository } from "../../domain/repositories/MercadoPagoLogRepository";
 import { MercadoPagoClient } from "../../infrastructure/services/MercadoPagoClient";
+import type { IngestError } from "./IngestError";
 
 export interface HandleMPWebhookInput {
   configName: string;
@@ -17,6 +18,7 @@ export class HandleMPWebhook {
   constructor(
     private configRepo: MercadoPagoConfigRepository,
     private logRepo:    MercadoPagoLogRepository,
+    private ingestError: IngestError,
   ) {}
 
   async execute(input: HandleMPWebhookInput): Promise<void> {
@@ -82,8 +84,16 @@ export class HandleMPWebhook {
           });
           forwardStatusCode = forward.status;
           forwardResponse = await forward.text().catch(() => "");
-        } catch {
+          if (!forward.ok) {
+            await this.reportForwardFailure(config.name, config.webhookUrl, `HTTP ${forward.status}: ${forwardResponse}`);
+          }
+        } catch (error) {
           forwardResponse = "FORWARD_FAILED";
+          await this.reportForwardFailure(
+            config.name,
+            config.webhookUrl,
+            error instanceof Error ? error.message : String(error),
+          );
         }
       }
       await this.logRepo.updateStatus(log.id, {
@@ -97,5 +107,15 @@ export class HandleMPWebhook {
         forwardResponse,
       });
     }
+  }
+
+  private async reportForwardFailure(configName: string, webhookUrl: string, detail: string): Promise<void> {
+    await this.ingestError.execute({
+      type: "MERCADOPAGO_SUBSCRIPTION_FORWARD_FAILED",
+      message: `No se pudo reenviar la confirmacion de Mercado Pago a StockBackend para la configuracion ${configName}.`,
+      severity: "critical",
+      stackTrace: detail,
+      meta: { url: webhookUrl },
+    }).catch(() => undefined);
   }
 }

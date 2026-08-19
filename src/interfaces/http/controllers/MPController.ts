@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import type { CreateMPPreference } from "../../../application/use-cases/CreateMPPreference";
 import type { GetMPPayment } from "../../../application/use-cases/GetMPPayment";
 import type { HandleMPWebhook } from "../../../application/use-cases/HandleMPWebhook";
+import type { GetMPPaymentByReference } from "../../../application/use-cases/GetMPPaymentByReference";
 import type { ListMPConfigs } from "../../../application/use-cases/ListMPConfigs";
 import type { CreateMPConfig } from "../../../application/use-cases/CreateMPConfig";
 import type { UpdateMPConfig } from "../../../application/use-cases/UpdateMPConfig";
@@ -14,6 +15,7 @@ export class MPController {
     private createMPPreference: CreateMPPreference,
     private getMPPayment:       GetMPPayment,
     private handleMPWebhook:    HandleMPWebhook,
+    private getMPPaymentByReference: GetMPPaymentByReference,
     private listMPConfigs:      ListMPConfigs,
     private createMPConfig:     CreateMPConfig,
     private updateMPConfig:     UpdateMPConfig,
@@ -57,6 +59,19 @@ export class MPController {
       if (err.message === "MISSING_PAYMENT_ID") { res.status(400).json({ message: err.message }); return; }
       if (err.message === "CONFIG_NOT_FOUND")   { res.status(404).json({ message: err.message }); return; }
       if (err.message === "PAYMENT_NOT_FOUND")  { res.status(404).json({ message: err.message }); return; }
+      throw err;
+    }
+  };
+
+  handleGetPaymentByReference = async (req: Request, res: Response): Promise<void> => {
+    const apiKeyId = (req as ApiKeyRequest).apiKey?.id ?? "";
+    try {
+      const result = await this.getMPPaymentByReference.execute(apiKeyId, req.params.externalReference);
+      res.json(result);
+    } catch (err) {
+      if (!(err instanceof Error)) throw err;
+      if (err.message === "MISSING_EXTERNAL_REFERENCE") { res.status(400).json({ message: err.message }); return; }
+      if (err.message === "CONFIG_NOT_FOUND" || err.message === "PAYMENT_NOT_FOUND") { res.status(404).json({ message: err.message }); return; }
       throw err;
     }
   };
