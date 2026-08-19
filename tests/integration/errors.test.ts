@@ -7,6 +7,7 @@ afterAll(async () => { await teardown(); });
 
 let token: string;
 let ingestKey: string;
+let ingestKeyId: string;
 
 beforeEach(async () => {
   const res = await request(app).post("/auth/register").send({
@@ -23,6 +24,7 @@ beforeEach(async () => {
     .set({ Authorization: `Bearer ${token}` })
     .send({ name: "Test Key" });
   ingestKey = keyRes.body.key as string;
+  ingestKeyId = keyRes.body.id as string;
 });
 
 const auth = () => ({ Authorization: `Bearer ${token}` });
@@ -144,6 +146,36 @@ describe("GET /errors", () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].type).toBe("ConfigAError");
+  });
+
+  it("associates an ingested error with the configuration assigned to its API key", async () => {
+    const config = await request(app)
+      .post("/error-configs")
+      .set(auth())
+      .send({ name: "Aplicación con key", apiKeyId: ingestKeyId });
+
+    const ingested = await request(app).post("/errors/ingest").set(ingestHeaders()).send({
+      type: "ApiKeyError",
+      message: "Se asocia usando la key",
+    });
+
+    expect(ingested.status).toBe(201);
+    expect(ingested.body.errorConfigId).toBe(config.body.id);
+  });
+
+  it("does not allow an API key to be assigned to two error configurations", async () => {
+    await request(app)
+      .post("/error-configs")
+      .set(auth())
+      .send({ name: "Aplicación A", apiKeyId: ingestKeyId });
+
+    const duplicate = await request(app)
+      .post("/error-configs")
+      .set(auth())
+      .send({ name: "Aplicación B", apiKeyId: ingestKeyId });
+
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.message).toBe("API_KEY_ALREADY_ASSIGNED");
   });
 
   it("returns 401 without JWT", async () => {

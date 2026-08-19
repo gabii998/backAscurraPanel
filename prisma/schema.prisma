@@ -228,7 +228,7 @@ model ApiKey {
 model ErrorConfig {
   id        String     @id @default(uuid())
   name      String
-  apiKeyId  String?
+  apiKeyId  String?    @unique
   createdAt DateTime   @default(now())
   apiKey    ApiKey?    @relation(fields: [apiKeyId], references: [id])
   errors    AppError[]

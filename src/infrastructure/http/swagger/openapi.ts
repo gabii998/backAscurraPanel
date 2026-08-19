@@ -1161,6 +1161,7 @@ export const openApiSpec = {
         },
         responses: {
           "201": { description: "Creada", content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorConfig" } } } },
+          "409": { description: "La API key ya está asignada a otra configuración" },
           "401": { description: "No autenticado" },
         },
       },

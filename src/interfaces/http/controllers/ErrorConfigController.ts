@@ -18,9 +18,17 @@ export class ErrorConfigController {
       res.status(400).json({ message: "MISSING_FIELDS" });
       return;
     }
-    const config = await this.createErrorConfig.execute({ name, apiKeyId });
-    const detail = await this.getErrorConfig.execute(config.id);
-    res.status(201).json(detail);
+    try {
+      const config = await this.createErrorConfig.execute({ name, apiKeyId });
+      const detail = await this.getErrorConfig.execute(config.id);
+      res.status(201).json(detail);
+    } catch (error) {
+      if (error instanceof Error && error.message === "API_KEY_ALREADY_ASSIGNED") {
+        res.status(409).json({ message: "API_KEY_ALREADY_ASSIGNED" });
+        return;
+      }
+      throw error;
+    }
   }
 
   async handleList(_req: Request, res: Response): Promise<void> {

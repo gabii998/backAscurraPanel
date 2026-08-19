@@ -4,7 +4,10 @@ import type { ListErrors } from "../../../application/use-cases/ListErrors";
 import type { GetError } from "../../../application/use-cases/GetError";
 import type { UpdateErrorStatus } from "../../../application/use-cases/UpdateErrorStatus";
 import type { DeleteError } from "../../../application/use-cases/DeleteError";
+import type { FindErrorConfigsByApiKey } from "../../../application/use-cases/FindErrorConfigsByApiKey";
 import type { ErrorSeverity, ErrorStatus } from "../../../domain/entities/AppError";
+import type { ErrorIngestData } from "../../../domain/model/ErrorIngestData";
+import type { ApiKeyRequest } from "../../../infrastructure/http/express/middleware/ingestKeyMiddleware";
 
 export class ErrorController {
   constructor(
@@ -12,7 +15,8 @@ export class ErrorController {
     private readonly listErrors: ListErrors,
     private readonly getError: GetError,
     private readonly updateErrorStatus: UpdateErrorStatus,
-    private readonly deleteError: DeleteError
+    private readonly deleteError: DeleteError,
+    private readonly findErrorConfigsByApiKey: FindErrorConfigsByApiKey,
   ) {}
 
   async handleIngest(req: Request, res: Response): Promise<void> {
@@ -21,7 +25,12 @@ export class ErrorController {
       res.status(400).json({ message: "MISSING_FIELDS" });
       return;
     }
-    const error = await this.ingestError.execute(req.body);
+    const data: ErrorIngestData = { ...(req.body as ErrorIngestData) };
+    if (!data.errorConfigId) {
+      const configs = await this.findErrorConfigsByApiKey.execute((req as ApiKeyRequest).apiKey.id);
+      if (configs.length === 1) data.errorConfigId = configs[0].id;
+    }
+    const error = await this.ingestError.execute(data);
     res.status(201).json(error);
   }
 

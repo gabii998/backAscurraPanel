@@ -57,6 +57,13 @@ export class PrismaErrorConfigRepository implements ErrorConfigRepository {
     };
   }
 
+  async findByApiKeyId(apiKeyId: string): Promise<ErrorConfig[]> {
+    return prisma.errorConfig.findMany({
+      where: { apiKeyId },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await prisma.errorConfig.delete({ where: { id } });
   }

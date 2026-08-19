@@ -56,6 +56,7 @@ import { CreateErrorConfig } from "../../../application/use-cases/CreateErrorCon
 import { ListErrorConfigs } from "../../../application/use-cases/ListErrorConfigs";
 import { GetErrorConfig } from "../../../application/use-cases/GetErrorConfig";
 import { DeleteErrorConfig } from "../../../application/use-cases/DeleteErrorConfig";
+import { FindErrorConfigsByApiKey } from "../../../application/use-cases/FindErrorConfigsByApiKey";
 import { SendMail } from "../../../application/use-cases/SendMail";
 import { ListMailConfigs } from "../../../application/use-cases/ListMailConfigs";
 import { CreateMailConfig } from "../../../application/use-cases/CreateMailConfig";
@@ -331,7 +332,8 @@ export const buildServer = (): Express => {
   const getError          = new GetError(errorRepository);
   const updateErrorStatus = new UpdateErrorStatus(errorRepository);
   const deleteError       = new DeleteError(errorRepository);
-  const errorController   = new ErrorController(ingestError, listErrors, getError, updateErrorStatus, deleteError);
+  const findErrorConfigsByApiKey = new FindErrorConfigsByApiKey(errorConfigRepository);
+  const errorController   = new ErrorController(ingestError, listErrors, getError, updateErrorStatus, deleteError, findErrorConfigsByApiKey);
 
   // Prospect use cases + controller
   const createProspect      = new CreateProspect(prospectRepository);
