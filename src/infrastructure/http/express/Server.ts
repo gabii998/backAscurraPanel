@@ -327,7 +327,7 @@ export const buildServer = (): Express => {
   const clientController = new ClientController(createClient, listClients, getClient, updateClient, deleteClient);
 
   // Error use cases + controller
-  const ingestError       = new IngestError(errorRepository);
+  const ingestError       = new IngestError(errorRepository, notificationDispatcher);
   const listErrors        = new ListErrors(errorRepository);
   const getError          = new GetError(errorRepository);
   const updateErrorStatus = new UpdateErrorStatus(errorRepository);

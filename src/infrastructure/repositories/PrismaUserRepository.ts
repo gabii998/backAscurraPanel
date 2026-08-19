@@ -9,6 +9,7 @@ const NOTIF_DEFAULTS: Record<string, boolean> = {
   "deploy-done": true,
   "weekly-digest": true,
   "client-update": false,
+  "error-detected": true,
 };
 
 export class PrismaUserRepository implements UserRepository {

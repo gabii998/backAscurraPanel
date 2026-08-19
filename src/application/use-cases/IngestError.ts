@@ -3,8 +3,15 @@ import type { AppErrorRepository } from "../../domain/repositories/AppErrorRepos
 import type { ErrorIngestData } from "../../domain/model/ErrorIngestData";
 import type { AppError } from "../../domain/entities/AppError";
 
+interface ErrorNotificationDispatcher {
+  newError(error: AppError): Promise<void>;
+}
+
 export class IngestError {
-  constructor(private readonly repository: AppErrorRepository) {}
+  constructor(
+    private readonly repository: AppErrorRepository,
+    private readonly notificationDispatcher?: ErrorNotificationDispatcher,
+  ) {}
 
   async execute(data: ErrorIngestData): Promise<AppError> {
     const errorConfigId = data.errorConfigId ?? null;
@@ -55,6 +62,7 @@ export class IngestError {
 
     await this.repository.create(error);
     await this.repository.addOccurrence(error.id, occurrence);
+    await this.notificationDispatcher?.newError(error);
     return error;
   }
 }

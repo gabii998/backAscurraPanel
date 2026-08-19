@@ -55,6 +55,16 @@ describe("IngestError", () => {
     expect(result.usersAffected).toBe(1);
   });
 
+  it("notifies users when a new error is created", async () => {
+    const repo = makeRepo();
+    const notificationDispatcher = { newError: jest.fn().mockResolvedValue(undefined) };
+    const uc = new IngestError(repo, notificationDispatcher);
+
+    const result = await uc.execute({ type: "TypeError", message: "Cannot read x" });
+
+    expect(notificationDispatcher.newError).toHaveBeenCalledWith(result);
+  });
+
   it("sets usersAffected=0 when no user is provided on new error", async () => {
     const repo = makeRepo();
     const uc = new IngestError(repo);
@@ -86,6 +96,19 @@ describe("IngestError", () => {
     });
     expect(result.count).toBe(2);
     expect(result.usersAffected).toBe(1);
+  });
+
+  it("does not notify again when an error is grouped with an existing one", async () => {
+    const repo = makeRepo({
+      findByFingerprint: jest.fn().mockResolvedValue(baseError),
+      findById: jest.fn().mockResolvedValue({ ...baseError, count: 2 }),
+    });
+    const notificationDispatcher = { newError: jest.fn().mockResolvedValue(undefined) };
+    const uc = new IngestError(repo, notificationDispatcher);
+
+    await uc.execute({ type: "TypeError", message: "Cannot read x" });
+
+    expect(notificationDispatcher.newError).not.toHaveBeenCalled();
   });
 
   it("increments usersAffected on duplicate with new user", async () => {

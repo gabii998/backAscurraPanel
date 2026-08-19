@@ -1,5 +1,6 @@
 import type { UserRepository } from "../../domain/repositories/UserRepository";
 import type { CreateNotification } from "../use-cases/CreateNotification";
+import type { AppError } from "../../domain/entities/AppError";
 
 export class NotificationDispatcher {
   constructor(
@@ -33,5 +34,20 @@ export class NotificationDispatcher {
       body: `Se te asignó "${taskTitle}"`,
       entityId: taskId,
     });
+  }
+
+  async newError(error: AppError): Promise<void> {
+    const allUsers = await this.userRepository.list();
+    for (const user of allUsers) {
+      const prefs = await this.userRepository.getNotifications(user.id);
+      if (!prefs["error-detected"]) continue;
+      await this.createNotification.execute({
+        userId: user.id,
+        type: "error-detected",
+        title: "Nuevo error detectado",
+        body: `${error.type}: ${error.message}`,
+        entityId: error.id,
+      });
+    }
   }
 }
