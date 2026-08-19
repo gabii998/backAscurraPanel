@@ -202,6 +202,7 @@ export const openApiSpec = {
           website:       { type: "string" },
           hours:         { type: "string" },
           socialMedia:   { type: "string" },
+          instagramUrl:  { type: "string" },
           hasWebsite:    { type: "boolean" },
           hasSocialMedia:{ type: "boolean" },
           rating:        { type: "number" },
@@ -1068,6 +1069,7 @@ export const openApiSpec = {
         parameters: [
           { name: "severity",      in: "query", schema: { type: "string", enum: ["critical", "error", "warning"] } },
           { name: "status",        in: "query", schema: { type: "string", enum: ["unresolved", "resolved", "ignored"] } },
+          { name: "configId",      in: "query", schema: { type: "string", format: "uuid" }, description: "ID de configuración de errores" },
           { name: "errorConfigId", in: "query", schema: { type: "string", format: "uuid" } },
           { name: "q",             in: "query", schema: { type: "string" } },
         ],
@@ -1323,6 +1325,7 @@ export const openApiSpec = {
                   industry: { type: "string" },
                   phone:    { type: "string" },
                   website:  { type: "string" },
+                  instagramUrl: { type: "string" },
                   notes:    { type: "string" },
                 },
               },
@@ -1374,6 +1377,7 @@ export const openApiSpec = {
                 properties: {
                   stage: { type: "string", enum: ["new", "contacted", "interested", "discarded"] },
                   notes: { type: "string" },
+                  instagramUrl: { type: "string" },
                 },
               },
             },

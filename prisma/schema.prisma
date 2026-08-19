@@ -244,6 +244,7 @@ model Prospect {
   website        String         @default("")
   hours          String         @default("")
   socialMedia    String         @default("")
+  instagramUrl   String         @default("")
   hasWebsite     Boolean        @default(false)
   hasSocialMedia Boolean        @default(false)
   rating         Float          @default(0)

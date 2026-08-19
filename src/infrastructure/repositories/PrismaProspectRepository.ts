@@ -13,6 +13,7 @@ function toProspect(r: NonNullable<Awaited<ReturnType<typeof prisma.prospect.fin
     website:        r.website,
     hours:          r.hours,
     socialMedia:    r.socialMedia,
+    instagramUrl:   r.instagramUrl,
     hasWebsite:     r.hasWebsite,
     hasSocialMedia: r.hasSocialMedia,
     rating:         r.rating,
@@ -36,25 +37,30 @@ export class PrismaProspectRepository implements ProspectRepository {
     let count = 0;
     for (const p of prospects) {
       if (p.googleId) {
-        // Known place → upsert to refresh data on re-scrape
-        await prisma.prospect.upsert({
-          where:  { googleId: p.googleId },
-          create: p,
-          update: {
-            name:           p.name,
-            rating:         p.rating,
-            reviewCount:    p.reviewCount,
-            score:          p.score,
-            scoreLabel:     p.scoreLabel,
-            hasWebsite:     p.hasWebsite,
-            hasSocialMedia: p.hasSocialMedia,
-            website:        p.website,
-            hours:          p.hours,
-            socialMedia:    p.socialMedia,
-            phone:          p.phone,
-            address:        p.address,
-          },
-        });
+        const existing = await prisma.prospect.findUnique({ where: { googleId: p.googleId } });
+        if (existing) {
+          // A manually saved account remains the source of truth on re-scrapes.
+          await prisma.prospect.update({
+            where: { googleId: p.googleId },
+            data: {
+              name:           p.name,
+              rating:         p.rating,
+              reviewCount:    p.reviewCount,
+              score:          p.score,
+              scoreLabel:     p.scoreLabel,
+              hasWebsite:     p.hasWebsite,
+              hasSocialMedia: p.hasSocialMedia,
+              website:        p.website,
+              hours:          p.hours,
+              socialMedia:    p.socialMedia,
+              ...(existing.instagramUrl || !p.instagramUrl ? {} : { instagramUrl: p.instagramUrl }),
+              phone:          p.phone,
+              address:        p.address,
+            },
+          });
+        } else {
+          await prisma.prospect.create({ data: p });
+        }
       } else {
         // No googleId → always create (can't deduplicate without a key)
         await prisma.prospect.create({ data: { ...p, googleId: null } });

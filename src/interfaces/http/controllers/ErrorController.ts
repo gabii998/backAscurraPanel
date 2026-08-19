@@ -26,11 +26,13 @@ export class ErrorController {
   }
 
   async handleList(req: Request, res: Response): Promise<void> {
-    const { severity, status, errorConfigId, q } = req.query as Record<string, string | undefined>;
+    const { severity, status, errorConfigId, configId, q } = req.query as Record<string, string | undefined>;
     const errors = await this.listErrors.execute({
       severity:  severity  as ErrorSeverity | undefined,
       status:    status    as ErrorStatus   | undefined,
-      errorConfigId,
+      // `configId` is the identifier exposed by the configuration selector.
+      // Keep `errorConfigId` for backwards compatibility with existing clients.
+      errorConfigId: errorConfigId ?? configId,
       query: q,
     });
     res.json(errors);

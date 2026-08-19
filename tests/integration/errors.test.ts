@@ -119,6 +119,33 @@ describe("GET /errors", () => {
     expect(res.body).toHaveLength(2);
   });
 
+  it("filters errors by the selected configuration", async () => {
+    const firstConfig = await request(app)
+      .post("/error-configs")
+      .set(auth())
+      .send({ name: "Aplicación A" });
+    const secondConfig = await request(app)
+      .post("/error-configs")
+      .set(auth())
+      .send({ name: "Aplicación B" });
+
+    await request(app).post("/errors/ingest").set(ingestHeaders()).send({
+      type: "ConfigAError",
+      message: "Error de la aplicación A",
+      errorConfigId: firstConfig.body.id,
+    });
+    await request(app).post("/errors/ingest").set(ingestHeaders()).send({
+      type: "ConfigBError",
+      message: "Error de la aplicación B",
+      errorConfigId: secondConfig.body.id,
+    });
+
+    const res = await request(app).get(`/errors?configId=${firstConfig.body.id}`).set(auth());
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].type).toBe("ConfigAError");
+  });
+
   it("returns 401 without JWT", async () => {
     const res = await request(app).get("/errors");
     expect(res.status).toBe(401);

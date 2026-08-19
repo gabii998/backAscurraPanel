@@ -10,6 +10,7 @@ export interface Prospect {
   website: string;
   hours: string;
   socialMedia: string;
+  instagramUrl: string;
   hasWebsite: boolean;
   hasSocialMedia: boolean;
   rating: number;
