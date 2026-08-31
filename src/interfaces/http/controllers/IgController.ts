@@ -21,6 +21,7 @@ import type { ConnectIgAccount } from "../../../application/use-cases/ConnectIgA
 import type { UploadIgPostImage } from "../../../application/use-cases/UploadIgPostImage";
 import type { PublishIgPost } from "../../../application/use-cases/PublishIgPost";
 import type { SyncIgPostMetrics } from "../../../application/use-cases/SyncIgPostMetrics";
+import type { EstimateIgGenerationCost } from "../../../application/use-cases/EstimateIgGenerationCost";
 import type { IgPostStatus } from "../../../domain/entities/IgPost";
 import { prisma } from "../../../infrastructure/db/prisma";
 
@@ -47,6 +48,7 @@ export class IgController {
     private uploadIgPostImage:         UploadIgPostImage,
     private publishIgPost:             PublishIgPost,
     private syncIgPostMetrics:         SyncIgPostMetrics,
+    private estimateIgGenerationCost:  EstimateIgGenerationCost,
   ) {}
 
   // ── Templates ─────────────────────────────────────────
@@ -124,22 +126,43 @@ export class IgController {
   };
 
   handleGenerate = async (req: Request, res: Response): Promise<void> => {
-    const { quantity, topic, forceTemplateId } = req.body as Record<string, unknown>;
+    const { quantity, topic, forceTemplateId, referencePostIds, styleReferenceIds, contentAssetIds, campaignContext } = req.body as Record<string, unknown>;
     try {
       const job = await this.generateIgPosts.execute({
         brandId:         req.params.brandId,
         quantity:        typeof quantity === "number" ? quantity : parseInt(String(quantity || "1"), 10),
         topic:           typeof topic === "string" ? topic : undefined,
         forceTemplateId: typeof forceTemplateId === "string" ? forceTemplateId : undefined,
+        referencePostIds: Array.isArray(referencePostIds) ? referencePostIds.filter((id): id is string => typeof id === "string") : [],
+        styleReferenceIds: Array.isArray(styleReferenceIds) ? styleReferenceIds.filter((id): id is string => typeof id === "string") : undefined,
+        contentAssetIds: Array.isArray(contentAssetIds) ? contentAssetIds.filter((id): id is string => typeof id === "string") : [],
+        campaignContext: typeof campaignContext === "string" ? campaignContext : undefined,
       });
       res.status(201).json(job);
     } catch (err) {
       if (err instanceof Error) {
         if (err.message === "BRAND_NOT_FOUND")   { res.status(404).json({ message: err.message }); return; }
         if (err.message === "INVALID_QUANTITY")  { res.status(400).json({ message: err.message }); return; }
+        if (err.message === "INVALID_REFERENCE_POSTS") { res.status(400).json({ message: err.message }); return; }
+        if (err.message === "TEMPLATE_NOT_ASSET_COMPATIBLE") { res.status(400).json({ message: err.message }); return; }
       }
       throw err;
     }
+  };
+
+  handleEstimate = async (req: Request, res: Response): Promise<void> => {
+    const body = req.body as Record<string, unknown>;
+    const quantity = typeof body.quantity === "number" ? body.quantity : parseInt(String(body.quantity || "1"), 10);
+    if (!Number.isFinite(quantity) || quantity < 1 || quantity > 50) { res.status(400).json({ message: "INVALID_QUANTITY" }); return; }
+    try {
+      res.json(await this.estimateIgGenerationCost.execute(req.params.brandId, {
+        quantity,
+        topic: typeof body.topic === "string" ? body.topic : undefined,
+        campaignContext: typeof body.campaignContext === "string" ? body.campaignContext : undefined,
+        styleReferenceIds: Array.isArray(body.styleReferenceIds) ? body.styleReferenceIds.filter((id): id is string => typeof id === "string") : [],
+        contentAssetIds: Array.isArray(body.contentAssetIds) ? body.contentAssetIds.filter((id): id is string => typeof id === "string") : [],
+      }));
+    } catch (err) { if (err instanceof Error && err.message === "BRAND_NOT_FOUND") { res.status(404).json({ message: err.message }); return; } throw err; }
   };
 
   handleApprovePost = async (req: Request, res: Response): Promise<void> => {

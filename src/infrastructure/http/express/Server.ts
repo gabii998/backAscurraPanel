@@ -191,6 +191,8 @@ import { SynthesizeBrandLearning } from "../../../application/use-cases/Synthesi
 import { CheckSynthesisBatch } from "../../../application/use-cases/CheckSynthesisBatch";
 import { ConnectIgAccount } from "../../../application/use-cases/ConnectIgAccount";
 import { UploadIgPostImage } from "../../../application/use-cases/UploadIgPostImage";
+import { EstimateIgGenerationCost } from "../../../application/use-cases/EstimateIgGenerationCost";
+import { CheckIgExampleSummaryBatches } from "../../../application/use-cases/CheckIgExampleSummaryBatches";
 import { PublishIgPost } from "../../../application/use-cases/PublishIgPost";
 import { SyncIgPostMetrics } from "../../../application/use-cases/SyncIgPostMetrics";
 import { MetaGraphService } from "../../services/MetaGraphService";
@@ -208,6 +210,7 @@ import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "../swagger/openapi";
 import { buildHealthResponse } from "./health";
 import { startBatchPollingJob } from "../../jobs/batchPollingJob";
+import { R2Storage } from "../../services/R2Storage";
 
 export const buildServer = (): Express => {
   const app = express();
@@ -446,8 +449,9 @@ export const buildServer = (): Express => {
   const getBrand           = new GetBrand(brandRepository);
   const updateBrand        = new UpdateBrand(brandRepository);
   const deleteBrand        = new DeleteBrand(brandRepository);
-  const createIgExample    = new CreateIgExamplePost(brandRepository);
-  const deleteIgExample    = new DeleteIgExamplePost();
+  const r2Storage          = new R2Storage();
+  const createIgExample    = new CreateIgExamplePost(brandRepository, r2Storage);
+  const deleteIgExample    = new DeleteIgExamplePost(r2Storage);
   const listIgExamples     = new ListIgExamplePosts();
 
   const createIgTemplate   = new CreateIgTemplate(igTemplateRepository);
@@ -471,12 +475,14 @@ export const buildServer = (): Express => {
   const checkSynthesisBatch     = new CheckSynthesisBatch();
   const metaGraphService        = new MetaGraphService();
   const connectIgAccount        = new ConnectIgAccount(brandRepository, encryptionService);
-  const uploadIgPostImage       = new UploadIgPostImage(igPostRepository);
+  const uploadIgPostImage       = new UploadIgPostImage(igPostRepository, r2Storage);
+  const estimateIgGenerationCost = new EstimateIgGenerationCost();
+  const checkExampleSummaries   = new CheckIgExampleSummaryBatches();
   const syncIgPostMetrics       = new SyncIgPostMetrics(igPostRepository, brandRepository, metaGraphService, encryptionService);
   const publishIgPost           = new PublishIgPost(igPostRepository, brandRepository, metaGraphService, encryptionService, syncIgPostMetrics);
 
   const brandController = new BrandController(createBrand, listBrands, getBrand, updateBrand, deleteBrand, createIgExample, deleteIgExample, listIgExamples);
-  const igController    = new IgController(createIgTemplate, updateIgTemplate, deleteIgTemplate, listIgTemplates, generateIgPosts, checkBatchStatus, summarizeTemplates, checkSummaryBatch, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, uploadIgPostImage, publishIgPost, syncIgPostMetrics);
+  const igController    = new IgController(createIgTemplate, updateIgTemplate, deleteIgTemplate, listIgTemplates, generateIgPosts, checkBatchStatus, summarizeTemplates, checkSummaryBatch, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, uploadIgPostImage, publishIgPost, syncIgPostMetrics, estimateIgGenerationCost);
 
   // Contact requests use cases + controller
   const createContactRequest       = new CreateContactRequest(contactRequestRepository);
@@ -490,7 +496,7 @@ export const buildServer = (): Express => {
   app.use(buildBrandRoutes(brandController, authMiddleware));
   app.use(buildIgRoutes(igController, authMiddleware));
 
-  startBatchPollingJob(checkBatchStatus, igBatchJobRepository);
+  startBatchPollingJob(checkBatchStatus, igBatchJobRepository, checkExampleSummaries);
   app.use(buildContactRoutes(contactController, authMiddleware));
   app.use(buildRequestLogRoutes(requestLogController, authMiddleware));
 

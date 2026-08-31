@@ -43,6 +43,10 @@ export class CheckBatchStatus {
 
     const results = await openAI.downloadBatchResults(outputFileId);
     const posts = await this.postRepo.findByBatchJobId(jobId);
+    const assets = job.contentAssetIds.length > 0
+      ? await prisma.igExamplePost.findMany({ where: { brandId: job.brandId, id: { in: job.contentAssetIds } }, select: { id: true, imageUrl: true } })
+      : [];
+    const assetUrls = job.contentAssetIds.map(id => assets.find(asset => asset.id === id)?.imageUrl ?? "");
 
     let totalInput = 0;
     let totalOutput = 0;
@@ -83,7 +87,11 @@ export class CheckBatchStatus {
       await this.postRepo.update(post.id, {
         caption: parsed.caption ?? "",
         hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags : [],
-        variables: parsed.variables ?? {},
+        variables: {
+          ...(parsed.variables ?? {}),
+          ...Object.fromEntries(assetUrls.map((url, index) => [`assetImageUrl${index + 1}`, url])),
+          ...(job.brandLogoUrl ? { brandLogoUrl: job.brandLogoUrl } : {}),
+        },
         templateId,
         status: "draft",
       });

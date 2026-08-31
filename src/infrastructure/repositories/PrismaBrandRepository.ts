@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma";
 import type { BrandRepository, BrandCreateData, BrandUpdateData } from "../../domain/repositories/BrandRepository";
-import type { Brand, BrandTypography } from "../../domain/entities/Brand";
+import type { Brand, BrandTypography, CompanyContext } from "../../domain/entities/Brand";
 import { EncryptionService } from "../services/EncryptionService";
 import { env } from "../../config/env";
 
@@ -18,6 +18,10 @@ function mapTypography(raw: unknown): BrandTypography {
   return {};
 }
 
+function mapCompanyContext(raw: unknown): CompanyContext {
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as CompanyContext : {};
+}
+
 function mapBrand(raw: Record<string, unknown>): Brand {
   return {
     id:              raw.id           as string,
@@ -31,6 +35,7 @@ function mapBrand(raw: Record<string, unknown>): Brand {
     igUserId:        (raw.igUserId    as string) ?? "",
     openAiModel:     (raw.openAiModel as string) ?? "",
     hasOpenAiApiKey: !!(raw.openAiApiKey as string),
+    companyContext: mapCompanyContext(raw.companyContext),
     createdAt:       raw.createdAt    as Date,
     updatedAt:       raw.updatedAt    as Date,
   };
@@ -48,6 +53,7 @@ export class PrismaBrandRepository implements BrandRepository {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         typography:   (data.typography   ?? {}) as any,
         logoUrl:      data.logoUrl      ?? "",
+        companyContext: (data.companyContext ?? {}) as object,
       },
     });
     return mapBrand(raw as unknown as Record<string, unknown>);
@@ -79,6 +85,7 @@ export class PrismaBrandRepository implements BrandRepository {
         ...(data.igAccessToken !== undefined && { igAccessToken: data.igAccessToken }),
         ...(data.openAiApiKey  !== undefined && { openAiApiKey: data.openAiApiKey ? encryption.encrypt(data.openAiApiKey) : "" }),
         ...(data.openAiModel   !== undefined && { openAiModel: data.openAiModel }),
+        ...(data.companyContext !== undefined && { companyContext: data.companyContext as object }),
       },
     });
     return mapBrand(raw as unknown as Record<string, unknown>);

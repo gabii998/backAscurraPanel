@@ -1,4 +1,4 @@
-import type { Brand, BrandTypography } from "../entities/Brand";
+import type { Brand, BrandTypography, CompanyContext } from "../entities/Brand";
 
 export interface BrandCreateData {
   name: string;
@@ -8,6 +8,7 @@ export interface BrandCreateData {
   colorPalette?: string[];
   typography?: BrandTypography;
   logoUrl?: string;
+  companyContext?: CompanyContext;
 }
 
 export interface BrandUpdateData {
@@ -22,6 +23,7 @@ export interface BrandUpdateData {
   igAccessToken?: string;
   openAiApiKey?: string;
   openAiModel?: string;
+  companyContext?: CompanyContext;
 }
 
 export interface BrandRepository {

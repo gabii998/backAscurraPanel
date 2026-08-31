@@ -9,6 +9,8 @@ export interface IgBatchJob {
   inputTokens: number;
   outputTokens: number;
   estimatedCostUsd: number;
+  contentAssetIds: string[];
+  brandLogoUrl: string;
   createdAt: Date;
   updatedAt: Date;
 }

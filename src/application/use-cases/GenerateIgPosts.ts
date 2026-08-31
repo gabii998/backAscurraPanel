@@ -11,6 +11,10 @@ export interface GenerateIgPostsInput {
   quantity: number;
   topic?: string;
   forceTemplateId?: string;
+  referencePostIds?: string[];
+  styleReferenceIds?: string[];
+  contentAssetIds?: string[];
+  campaignContext?: string;
 }
 
 export class GenerateIgPosts {
@@ -22,7 +26,7 @@ export class GenerateIgPosts {
   ) {}
 
   async execute(input: GenerateIgPostsInput): Promise<IgBatchJob> {
-    const { brandId, quantity, topic, forceTemplateId } = input;
+    const { brandId, quantity, topic, forceTemplateId, referencePostIds = [], styleReferenceIds = referencePostIds, contentAssetIds = [], campaignContext } = input;
 
     if (quantity < 1 || quantity > 50) throw new Error("INVALID_QUANTITY");
 
@@ -37,7 +41,7 @@ export class GenerateIgPosts {
       ? readyTemplates.filter(t => t.id === forceTemplateId)
       : readyTemplates;
 
-    const [approvedPosts, rejectedPosts, learning, examplePosts] = await Promise.all([
+    const [approvedPosts, rejectedPosts, learning, examplePosts, contentAssets] = await Promise.all([
       prisma.igPost.findMany({
         where: { brandId, status: "approved" },
         orderBy: { approvedAt: "desc" },
@@ -51,22 +55,31 @@ export class GenerateIgPosts {
         select: { caption: true, rejectReason: true },
       }),
       prisma.brandLearning.findUnique({ where: { brandId } }),
-      prisma.igExamplePost.findMany({
-        where: { brandId },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        select: { caption: true },
-      }),
+      prisma.igExamplePost.findMany({ where: { brandId, id: { in: styleReferenceIds }, assetType: "style_reference", summaryStatus: "done" }, select: { id: true, styleSummary: true } }),
+      prisma.igExamplePost.findMany({ where: { brandId, id: { in: contentAssetIds }, assetType: { in: ["product", "system_screenshot", "brand_asset"] } }, select: { id: true, assetType: true, title: true, description: true, imageUrl: true, isPrimaryLogo: true } }),
     ]);
+    const uniqueStyleIds = [...new Set(styleReferenceIds)];
+    const uniqueAssetIds = [...new Set(contentAssetIds)];
+    if (styleReferenceIds.length !== uniqueStyleIds.length || contentAssetIds.length !== uniqueAssetIds.length || examplePosts.length !== uniqueStyleIds.length || contentAssets.length !== uniqueAssetIds.length || uniqueAssetIds.length > 3) throw new Error("INVALID_REFERENCE_POSTS");
+    const requiredAssetVariables = contentAssets.map((_, index) => `assetImageUrl${index + 1}`);
+    const logoUrl = brand.logoUrl || "";
+    const requiredVariables = [...requiredAssetVariables, ...(logoUrl ? ["brandLogoUrl"] : [])];
+    const compatibleTemplates = requiredVariables.length === 0
+      ? templatesForPrompt
+      : templatesForPrompt.filter(template => requiredVariables.every(variable => template.variables.includes(variable)));
+    if (forceTemplateId && compatibleTemplates.length === 0) throw new Error("TEMPLATE_NOT_ASSET_COMPATIBLE");
 
     const systemPrompt = buildSystemPrompt(
       brand,
-      templatesForPrompt,
+      compatibleTemplates,
       colorPalette,
       approvedPosts.slice(0, 5),
       rejectedPosts,
       learning?.insightStatus === "done" ? learning.insights : null,
       examplePosts,
+      contentAssets,
+      campaignContext,
+      brand.companyContext as Record<string, string | undefined>,
       topHashtags(approvedPosts),
     );
 
@@ -85,6 +98,8 @@ export class GenerateIgPosts {
       prompt: systemPrompt,
       status: "processing",
       postCount: quantity,
+      contentAssetIds: uniqueAssetIds,
+      brandLogoUrl: logoUrl,
     });
 
     await this.postRepo.createMany(
@@ -123,7 +138,10 @@ function buildSystemPrompt(
   approvedPosts: Array<{ caption: string; hashtags: string[]; igReach: number; igEngagement: number; igSaved: number; igSyncedAt: Date | null; template: { name: string } | null }>,
   rejectedPosts: Array<{ caption: string; rejectReason: string }>,
   insights: string | null,
-  examplePosts: Array<{ caption: string }>,
+  examplePosts: Array<{ styleSummary: string }>,
+  contentAssets: Array<{ assetType: string; title: string; description: string; imageUrl: string; isPrimaryLogo: boolean }>,
+  campaignContext: string | undefined,
+  companyContext: Record<string, string | undefined>,
   brandHashtags: string[],
 ): string {
   const templateList = templates.length > 0
@@ -138,9 +156,15 @@ function buildSystemPrompt(
   let contextSection = "";
 
   if (examplePosts.length > 0) {
-    const lines = examplePosts.map(p => `- "${p.caption}"`).join("\n");
-    contextSection += `\n📌 Captions de referencia de la marca (estilo objetivo):\n${lines}\n`;
+    const lines = examplePosts.map(p => `- ${p.styleSummary}`).join("\n");
+    contextSection += `\n📌 Referencias seleccionadas de la marca (estilo objetivo):\n${lines}\n`;
   }
+  if (contentAssets.length > 0) {
+    contextSection += `\n🖼️ Assets de contenido seleccionados (usá las URLs solo como valores de assetImageUrl1..3, nunca en HTML):\n${contentAssets.map((asset, index) => `- assetImageUrl${index + 1}: ${asset.imageUrl}; tipo: ${asset.assetType}; título: ${asset.title}; descripción: ${asset.description}`).join("\n")}\n`;
+  }
+  if (campaignContext?.trim()) contextSection += `\n📣 Contexto temporal de campaña: ${campaignContext.trim()}\n`;
+  const companyLines = Object.entries(companyContext).filter(([, value]) => value?.trim()).map(([key, value]) => `- ${key}: ${value}`).join("\n");
+  if (companyLines) contextSection += `\n🏢 Contexto estable de la empresa:\n${companyLines}\n`;
 
   if (brandHashtags.length > 0) {
     contextSection += `\n#️⃣ Hashtags que funcionan para esta marca (usar y complementar con nuevos):\n${brandHashtags.join(" ")}\n`;
@@ -192,6 +216,7 @@ Reglas:
 - Si no hay templates disponibles o ninguno aplica, devolvé templateId: null y generá templateHtml (HTML/CSS completo, formato cuadrado 1080x1080px, usando los colores de la marca como variables CSS, con placeholders {{variable}} para el contenido dinámico) y templateName con un nombre descriptivo.
 - El HTML generado debe incluir: estilos inline o <style>, no referencias a archivos externos salvo Google Fonts si la marca lo tiene configurado.
 - ${htmlFontRule}
+- Si usás assets, usá placeholders {{assetImageUrl1}}, {{assetImageUrl2}} o {{assetImageUrl3}}. Nunca escribas una URL fija en templateHtml.
 - Devolvé SOLO JSON válido, sin texto adicional ni markdown.
 
 Schema de respuesta:

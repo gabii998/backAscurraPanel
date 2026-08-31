@@ -1,10 +1,12 @@
 import cron from "node-cron";
 import type { CheckBatchStatus } from "../../application/use-cases/CheckBatchStatus";
 import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobRepository";
+import type { CheckIgExampleSummaryBatches } from "../../application/use-cases/CheckIgExampleSummaryBatches";
 
 export function startBatchPollingJob(
   checkBatchStatus: CheckBatchStatus,
   jobRepo: IgBatchJobRepository,
+  checkExampleSummaries: CheckIgExampleSummaryBatches,
 ): void {
   cron.schedule("*/5 * * * *", async () => {
     try {
@@ -14,6 +16,7 @@ export function startBatchPollingJob(
           console.error(`[batch-polling] Error al procesar job ${job.id}:`, err);
         });
       }
+      await checkExampleSummaries.executeAll();
       if (pendingJobs.length > 0) {
         console.log(`[batch-polling] Procesados ${pendingJobs.length} batch job(s)`);
       }

@@ -6,6 +6,8 @@ export interface IgBatchJobCreateData {
   prompt: string;
   status?: string;
   postCount?: number;
+  contentAssetIds?: string[];
+  brandLogoUrl?: string;
 }
 
 export interface IgBatchJobUpdateData {

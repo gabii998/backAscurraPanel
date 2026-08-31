@@ -24,6 +24,7 @@ export const buildIgRoutes = (
   // Posts
   router.get("/brands/:brandId/ig-posts",          authMiddleware, wrapRequestHandler(controller.handleListPosts.bind(controller)));
   router.post("/brands/:brandId/ig-posts/generate", authMiddleware, wrapRequestHandler(controller.handleGenerate.bind(controller)));
+  router.post("/brands/:brandId/ig-posts/estimate", authMiddleware, wrapRequestHandler(controller.handleEstimate.bind(controller)));
   router.get("/ig-posts/:id",                       authMiddleware, wrapRequestHandler(controller.handleGetPost.bind(controller)));
   router.patch("/ig-posts/:id/approve",             authMiddleware, wrapRequestHandler(controller.handleApprovePost.bind(controller)));
   router.patch("/ig-posts/:id/reject",              authMiddleware, wrapRequestHandler(controller.handleRejectPost.bind(controller)));

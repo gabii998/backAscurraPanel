@@ -2,6 +2,7 @@ export interface BatchRequest {
   customId: string;
   systemPrompt: string;
   userPrompt: string;
+  imageUrl?: string;
 }
 
 export interface BatchResult {

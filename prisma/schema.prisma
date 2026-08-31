@@ -482,6 +482,7 @@ model Brand {
   igAccessToken String          @default("")
   openAiApiKey  String          @default("")
   openAiModel   String          @default("")
+  companyContext Json           @default("{}")
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   examples      IgExamplePost[]
@@ -492,12 +493,26 @@ model Brand {
 }
 
 model IgExamplePost {
-  id        String   @id @default(uuid())
-  brandId   String
-  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  imageUrl  String   @default("")
-  caption   String
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  imageUrl       String   @default("")
+  objectKey      String   @default("")
+  fileName       String   @default("")
+  mimeType       String   @default("")
+  fileSize       Int      @default(0)
+  caption        String   @default("")
+  assetType      String   @default("style_reference")
+  title          String   @default("")
+  description    String   @default("")
+  notes          String   @default("")
+  isPrimaryLogo  Boolean  @default(false)
+  styleSummary   String   @default("")
+  summaryStatus  String   @default("pending")
+  summaryBatchId String?
+  summaryError   String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model IgTemplate {
@@ -563,6 +578,8 @@ model IgBatchJob {
   inputTokens      Int        @default(0)
   outputTokens     Int        @default(0)
   estimatedCostUsd Float      @default(0)
+  contentAssetIds  Json       @default("[]")
+  brandLogoUrl     String     @default("")
   posts            IgPost[]
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt

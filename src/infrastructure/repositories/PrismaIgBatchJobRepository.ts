@@ -14,6 +14,8 @@ function mapJob(raw: Record<string, unknown>): IgBatchJob {
     inputTokens:      (raw.inputTokens     as number) ?? 0,
     outputTokens:     (raw.outputTokens    as number) ?? 0,
     estimatedCostUsd: (raw.estimatedCostUsd as number) ?? 0,
+    contentAssetIds: Array.isArray(raw.contentAssetIds) ? raw.contentAssetIds as string[] : [],
+    brandLogoUrl: (raw.brandLogoUrl as string) ?? "",
     createdAt:        raw.createdAt        as Date,
     updatedAt:        raw.updatedAt        as Date,
   };
@@ -28,6 +30,8 @@ export class PrismaIgBatchJobRepository implements IgBatchJobRepository {
         prompt:        data.prompt,
         status:        data.status        ?? "pending",
         postCount:     data.postCount     ?? 0,
+        contentAssetIds: data.contentAssetIds ?? [],
+        brandLogoUrl: data.brandLogoUrl ?? "",
       },
     });
     return mapJob(raw as unknown as Record<string, unknown>);

@@ -18,7 +18,10 @@ export class OpenAIService implements OpenAIBatchService {
           model: this.model,
           messages: [
             { role: "system", content: r.systemPrompt },
-            { role: "user",   content: r.userPrompt },
+            { role: "user", content: r.imageUrl ? [
+              { type: "text", text: r.userPrompt },
+              { type: "image_url", image_url: { url: r.imageUrl, detail: "low" } },
+            ] : r.userPrompt },
           ],
           temperature: 0.8,
           response_format: { type: "json_object" },
