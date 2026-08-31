@@ -61,7 +61,7 @@ export class BrandController {
   };
 
   handleUpdate = async (req: Request, res: Response): Promise<void> => {
-    const { name, industry, acknowledge, voice, colorPalette, typography, logoUrl, companyContext } = req.body as Record<string, unknown>;
+    const { name, industry, acknowledge, voice, colorPalette, typography, logoUrl, companyContext, openAiApiKey, openAiModel } = req.body as Record<string, unknown>;
     const typographyValue = typography && typeof typography === "object" && !Array.isArray(typography)
       ? (typography as { primary?: string; secondary?: string; googleFontsUrl?: string })
       : undefined;
@@ -77,6 +77,8 @@ export class BrandController {
         ...(Array.isArray(colorPalette)     && { colorPalette: colorPalette as string[] }),
         ...(typographyValue !== undefined   && { typography: typographyValue }),
         ...(typeof logoUrl     === "string" && { logoUrl }),
+        ...(typeof openAiApiKey === "string" && { openAiApiKey }),
+        ...(typeof openAiModel  === "string" && { openAiModel }),
         ...(companyContextValue !== undefined && { companyContext: companyContextValue }),
       });
       res.json(brand);
