@@ -193,6 +193,7 @@ import { ConnectIgAccount } from "../../../application/use-cases/ConnectIgAccoun
 import { UploadIgPostImage } from "../../../application/use-cases/UploadIgPostImage";
 import { EstimateIgGenerationCost } from "../../../application/use-cases/EstimateIgGenerationCost";
 import { CheckIgExampleSummaryBatches } from "../../../application/use-cases/CheckIgExampleSummaryBatches";
+import { RetryIgExampleSummary } from "../../../application/use-cases/RetryIgExampleSummary";
 import { PublishIgPost } from "../../../application/use-cases/PublishIgPost";
 import { SyncIgPostMetrics } from "../../../application/use-cases/SyncIgPostMetrics";
 import { MetaGraphService } from "../../services/MetaGraphService";
@@ -453,6 +454,7 @@ export const buildServer = (): Express => {
   const createIgExample    = new CreateIgExamplePost(brandRepository, r2Storage);
   const deleteIgExample    = new DeleteIgExamplePost(r2Storage);
   const listIgExamples     = new ListIgExamplePosts();
+  const retryIgExampleSummary = new RetryIgExampleSummary();
 
   const createIgTemplate   = new CreateIgTemplate(igTemplateRepository);
   const updateIgTemplate   = new UpdateIgTemplate(igTemplateRepository);
@@ -481,7 +483,7 @@ export const buildServer = (): Express => {
   const syncIgPostMetrics       = new SyncIgPostMetrics(igPostRepository, brandRepository, metaGraphService, encryptionService);
   const publishIgPost           = new PublishIgPost(igPostRepository, brandRepository, metaGraphService, encryptionService, syncIgPostMetrics);
 
-  const brandController = new BrandController(createBrand, listBrands, getBrand, updateBrand, deleteBrand, createIgExample, deleteIgExample, listIgExamples);
+  const brandController = new BrandController(createBrand, listBrands, getBrand, updateBrand, deleteBrand, createIgExample, deleteIgExample, listIgExamples, retryIgExampleSummary);
   const igController    = new IgController(createIgTemplate, updateIgTemplate, deleteIgTemplate, listIgTemplates, generateIgPosts, checkBatchStatus, summarizeTemplates, checkSummaryBatch, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, uploadIgPostImage, publishIgPost, syncIgPostMetrics, estimateIgGenerationCost);
 
   // Contact requests use cases + controller

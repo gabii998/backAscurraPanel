@@ -8,6 +8,7 @@ import type { DeleteBrand } from "../../../application/use-cases/DeleteBrand";
 import type { CreateIgExamplePost } from "../../../application/use-cases/CreateIgExamplePost";
 import type { DeleteIgExamplePost } from "../../../application/use-cases/DeleteIgExamplePost";
 import type { ListIgExamplePosts } from "../../../application/use-cases/ListIgExamplePosts";
+import type { RetryIgExampleSummary } from "../../../application/use-cases/RetryIgExampleSummary";
 
 export class BrandController {
   constructor(
@@ -19,6 +20,7 @@ export class BrandController {
     private createIgExamplePost: CreateIgExamplePost,
     private deleteIgExamplePost: DeleteIgExamplePost,
     private listIgExamplePosts:  ListIgExamplePosts,
+    private retryIgExampleSummary: RetryIgExampleSummary,
   ) {}
 
   handleList = async (_req: Request, res: Response): Promise<void> => {
@@ -125,6 +127,19 @@ export class BrandController {
       if (err instanceof Error) {
         if (err.message === "MISSING_FIELDS" || err.message === "INVALID_IMAGE_TYPE" || err.message === "INVALID_PRIMARY_LOGO")  { res.status(400).json({ message: err.message }); return; }
         if (err.message === "BRAND_NOT_FOUND") { res.status(404).json({ message: err.message }); return; }
+      }
+      throw err;
+    }
+  };
+
+  handleRetryExampleSummary = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const example = await this.retryIgExampleSummary.execute(req.params.id, req.params.exId);
+      res.json(example);
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.message === "EXAMPLE_NOT_FOUND") { res.status(404).json({ message: err.message }); return; }
+        if (err.message === "INVALID_STYLE_REFERENCE") { res.status(400).json({ message: err.message }); return; }
       }
       throw err;
     }
