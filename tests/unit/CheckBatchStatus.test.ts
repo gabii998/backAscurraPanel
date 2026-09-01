@@ -50,6 +50,21 @@ describe("CheckBatchStatus", () => {
     });
   });
 
+  it("switches to the retried batch id and keeps status processing when getBatchStatus recreates the batch", async () => {
+    const job = baseJob();
+    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, openAiBatchId: "batch-retry-1", status: "processing" }) };
+    const postRepo = { findByBatchJobId: jest.fn() };
+    const templateRepo = {};
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "validating", outputFileId: undefined, errorFileId: undefined, retriedBatchId: "batch-retry-1" }),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, templateRepo as any).execute("job-1");
+
+    expect(jobRepo.update).toHaveBeenCalledWith("job-1", { openAiBatchId: "batch-retry-1", status: "processing" });
+  });
+
   it("falls back to a generic message when getBatchStatus provides no errorDetail", async () => {
     const job = baseJob();
     const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "failed" }) };

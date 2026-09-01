@@ -1,11 +1,12 @@
 const filesCreate = jest.fn().mockResolvedValue({ id: "file-input-1" });
+const filesRetrieve = jest.fn().mockResolvedValue({ status: "processed" });
 const batchesCreate = jest.fn().mockResolvedValue({ id: "batch-1" });
 const batchesRetrieve = jest.fn();
 const filesContent = jest.fn();
 
 jest.mock("openai", () =>
   jest.fn().mockImplementation(() => ({
-    files:   { create: filesCreate, content: filesContent },
+    files:   { create: filesCreate, content: filesContent, retrieve: filesRetrieve },
     batches: { create: batchesCreate, retrieve: batchesRetrieve },
   })),
 );
@@ -80,6 +81,62 @@ describe("OpenAIService", () => {
     });
   });
 
+  describe("submitBatch waits for the uploaded file to leave status 'uploaded'", () => {
+    // A freshly uploaded file starts as status "uploaded" and OpenAI processes it
+    // asynchronously; batches.create can fail to find it while it's still in that state.
+    // This reproduces the real production failure and its fix: poll files.retrieve until
+    // the file leaves "uploaded" (either "processed" or "error") before referencing it.
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      // clearMocks only clears call history, not implementations set via mockResolvedValue —
+      // restore the shared mock's default so later tests aren't stuck polling forever.
+      filesRetrieve.mockResolvedValue({ status: "processed" });
+    });
+
+    it("creates the batch immediately when the file is already processed", async () => {
+      filesRetrieve.mockResolvedValue({ status: "processed" });
+
+      await service.submitBatch([{ customId: "a", systemPrompt: "s", userPrompt: "u" }]);
+
+      expect(filesRetrieve).toHaveBeenCalledTimes(1);
+      expect(batchesCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it("polls until the file transitions out of 'uploaded' before creating the batch", async () => {
+      filesRetrieve
+        .mockResolvedValueOnce({ status: "uploaded" })
+        .mockResolvedValueOnce({ status: "uploaded" })
+        .mockResolvedValueOnce({ status: "processed" });
+
+      const promise = service.submitBatch([{ customId: "a", systemPrompt: "s", userPrompt: "u" }]);
+      await jest.advanceTimersByTimeAsync(500);
+      await jest.advanceTimersByTimeAsync(1000);
+      await promise;
+
+      expect(filesRetrieve).toHaveBeenCalledTimes(3);
+      expect(batchesCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it("gives up polling after the max attempts and still tries to create the batch", async () => {
+      filesRetrieve.mockResolvedValue({ status: "uploaded" });
+
+      const promise = service.submitBatch([{ customId: "a", systemPrompt: "s", userPrompt: "u" }]);
+      await jest.advanceTimersByTimeAsync(500);
+      await jest.advanceTimersByTimeAsync(1000);
+      await jest.advanceTimersByTimeAsync(2000);
+      await jest.advanceTimersByTimeAsync(2000);
+      await jest.advanceTimersByTimeAsync(2000);
+      await promise;
+
+      expect(filesRetrieve).toHaveBeenCalledTimes(5);
+      expect(batchesCreate).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("submitBatch retry on batches.create failure", () => {
     // OpenAI's Batch API can reject `batches.create` right after `files.create` succeeds
     // (observed as "Cannot find file ..., or organization ... does not have access to it").
@@ -91,6 +148,9 @@ describe("OpenAIService", () => {
 
     afterEach(() => {
       jest.useRealTimers();
+      // clearMocks only clears call history, not implementations set via mockRejectedValue —
+      // restore the shared mock's default so later tests don't inherit a permanent rejection.
+      batchesCreate.mockResolvedValue({ id: "batch-1" });
     });
 
     it("retries batches.create with backoff and succeeds once OpenAI accepts it", async () => {
@@ -169,6 +229,73 @@ describe("OpenAIService", () => {
       const result = await service.getBatchStatus("batch-1");
 
       expect(result.errorDetail).toBeUndefined();
+    });
+
+    // Reproduces a real production failure: batches.create() succeeds synchronously, but the
+    // batch later transitions to "failed" during OpenAI's async validation with a "Cannot find
+    // file" error, even though the file was uploaded successfully. Since the file itself is
+    // fine, recreate the batch against the same input_file_id instead of giving up.
+    describe("auto-retry on a 'cannot find file' validation failure", () => {
+      const cannotFindFileErrors = {
+        object: "list" as const,
+        data: [{ code: "invalid_request", message: "Cannot find file file-abc123, or organization org-xyz does not have access to it.", line: null, param: null }],
+      };
+
+      it("recreates the batch against the same input_file_id and returns retriedBatchId", async () => {
+        batchesRetrieve.mockResolvedValue({
+          status: "failed",
+          output_file_id: null,
+          error_file_id: null,
+          input_file_id: "file-abc123",
+          metadata: null,
+          errors: cannotFindFileErrors,
+        });
+        batchesCreate.mockResolvedValue({ id: "batch-retry-1", status: "validating", output_file_id: null, error_file_id: null });
+
+        const result = await service.getBatchStatus("batch-1");
+
+        expect(batchesCreate).toHaveBeenCalledWith({
+          input_file_id: "file-abc123",
+          endpoint: "/v1/chat/completions",
+          completion_window: "24h",
+          metadata: { retryCount: "1" },
+        });
+        expect(result).toEqual({ status: "validating", outputFileId: undefined, errorFileId: undefined, retriedBatchId: "batch-retry-1" });
+      });
+
+      it("stops auto-retrying once metadata.retryCount reaches the cap and surfaces the real failure", async () => {
+        batchesRetrieve.mockResolvedValue({
+          status: "failed",
+          output_file_id: null,
+          error_file_id: null,
+          input_file_id: "file-abc123",
+          metadata: { retryCount: "2" },
+          errors: cannotFindFileErrors,
+        });
+
+        const result = await service.getBatchStatus("batch-1");
+
+        expect(batchesCreate).not.toHaveBeenCalled();
+        expect(result.status).toBe("failed");
+        expect(result.retriedBatchId).toBeUndefined();
+        expect(result.errorDetail).toContain("Cannot find file");
+      });
+
+      it("does not auto-retry when the caller opts out via autoRetryOnFileError: false", async () => {
+        batchesRetrieve.mockResolvedValue({
+          status: "failed",
+          output_file_id: null,
+          error_file_id: null,
+          input_file_id: "file-abc123",
+          metadata: null,
+          errors: cannotFindFileErrors,
+        });
+
+        const result = await service.getBatchStatus("batch-1", { autoRetryOnFileError: false });
+
+        expect(batchesCreate).not.toHaveBeenCalled();
+        expect(result.retriedBatchId).toBeUndefined();
+      });
     });
   });
 

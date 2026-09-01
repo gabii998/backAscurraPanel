@@ -39,6 +39,24 @@ describe("CheckIgExampleSummaryBatches", () => {
     });
   });
 
+  it("switches to the retried batch id without marking the example as failed", async () => {
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
+      { id: "example-1", brandId: "brand-1", summaryBatchId: "batch-1" },
+    ]);
+    (prisma.igExamplePost.update as jest.Mock).mockResolvedValue({});
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "validating", outputFileId: undefined, errorFileId: undefined, retriedBatchId: "batch-retry-1" }),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+
+    await new CheckIgExampleSummaryBatches().executeAll();
+
+    expect(prisma.igExamplePost.update).toHaveBeenCalledWith({
+      where: { id: "example-1" },
+      data: { summaryBatchId: "batch-retry-1" },
+    });
+  });
+
   it("falls back to a generic message when getBatchStatus provides no errorDetail", async () => {
     (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
       { id: "example-1", brandId: "brand-1", summaryBatchId: "batch-1" },

@@ -9,7 +9,10 @@ export class CheckTemplateSummaryBatch {
 
   async execute(openAiBatchId: string, brandId: string): Promise<{ updatedCount: number }> {
     const openAI = await resolveOpenAIService(brandId);
-    const { status, outputFileId, errorFileId, errorDetail } = await openAI.getBatchStatus(openAiBatchId);
+    // autoRetryOnFileError: false — IgTemplate has no column to persist a retried batch id,
+    // and the frontend always re-polls with the original id, so an unbounded auto-retry
+    // inside getBatchStatus would recreate a fresh OpenAI batch on every single poll here.
+    const { status, outputFileId, errorFileId, errorDetail } = await openAI.getBatchStatus(openAiBatchId, { autoRetryOnFileError: false });
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
       console.error(`[CheckTemplateSummaryBatch] batch=${openAiBatchId} status=${status} detail=${errorDetail ?? "n/a"}`);

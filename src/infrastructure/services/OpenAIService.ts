@@ -12,6 +12,15 @@ export class OpenAIService implements OpenAIBatchService {
     this.client = new OpenAI({ apiKey, organization: null, project: null });
   }
 
+  private async waitUntilFileProcessed(fileId: string): Promise<void> {
+    const pollDelaysMs = [500, 1000, 2000, 2000, 2000];
+    for (const delay of pollDelaysMs) {
+      const file = await this.client.files.retrieve(fileId);
+      if (file.status !== "uploaded") return;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
   async submitBatch(requests: BatchRequest[]): Promise<string> {
     const lines = requests.map(r =>
       JSON.stringify({
@@ -42,6 +51,14 @@ export class OpenAIService implements OpenAIBatchService {
       purpose: "batch",
     });
 
+    // A freshly uploaded file starts out as status "uploaded" and OpenAI processes it
+    // asynchronously before it becomes visible to the Batch API's validator. Creating the
+    // batch while the file is still "uploaded" is what produces the observed production
+    // failure ("Cannot find file ..., or organization ... does not have access to it"),
+    // even though the file itself was uploaded successfully. Wait for it to leave that
+    // state (either "processed" or "error") before referencing it in the batch.
+    await this.waitUntilFileProcessed(uploaded.id);
+
     let batch;
     const retryDelaysMs = [1000, 2000, 4000];
     for (let attempt = 0; ; attempt++) {
@@ -61,11 +78,44 @@ export class OpenAIService implements OpenAIBatchService {
     return batch.id;
   }
 
-  async getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string; errorFileId?: string; errorDetail?: string }> {
+  async getBatchStatus(batchId: string, options?: { autoRetryOnFileError?: boolean }): Promise<{ status: string; outputFileId?: string; errorFileId?: string; errorDetail?: string; retriedBatchId?: string }> {
     const batch = await this.client.batches.retrieve(batchId);
     const errorDetail = batch.errors?.data?.length
       ? batch.errors.data.map(e => [e.code, e.message].filter(Boolean).join(": ")).join("; ")
       : undefined;
+
+    // OpenAI's Batch API can fail validation right after accepting the batch with
+    // "Cannot find file ..., or organization ... does not have access to it" even though
+    // the file was uploaded successfully moments earlier (observed in production). This
+    // looks like a platform-side file-visibility propagation delay rather than a permanent
+    // access problem, so recreate the batch against the same already-uploaded file instead
+    // of surfacing a hard failure to the caller. Capped via batch metadata (not a DB column)
+    // so a genuinely permanent failure still surfaces after a couple of attempts instead of
+    // looping forever across polling cycles. Callers that cannot persist the resulting
+    // retriedBatchId anywhere (so a re-poll would always hit this same dead batch and retry
+    // again unbounded, since batch metadata cannot be updated after creation) must opt out
+    // with autoRetryOnFileError: false.
+    const autoRetryOnFileError = options?.autoRetryOnFileError ?? true;
+    const retryCount = Number(batch.metadata?.retryCount ?? 0);
+    if (autoRetryOnFileError && batch.status === "failed" && errorDetail && /cannot find file/i.test(errorDetail) && batch.input_file_id && retryCount < 2) {
+      try {
+        const retried = await this.client.batches.create({
+          input_file_id:      batch.input_file_id,
+          endpoint:            "/v1/chat/completions",
+          completion_window:   "24h",
+          metadata:            { retryCount: String(retryCount + 1) },
+        });
+        return {
+          status:        retried.status,
+          outputFileId:  retried.output_file_id ?? undefined,
+          errorFileId:   retried.error_file_id ?? undefined,
+          retriedBatchId: retried.id,
+        };
+      } catch {
+        // fall through and report the original failure below
+      }
+    }
+
     return {
       status:       batch.status,
       outputFileId: batch.output_file_id ?? undefined,

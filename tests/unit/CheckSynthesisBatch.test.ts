@@ -96,6 +96,23 @@ describe("CheckSynthesisBatch", () => {
     });
   });
 
+  it("switches to the retried batch id without resetting insightStatus when getBatchStatus recreates the batch", async () => {
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "validating", outputFileId: undefined, errorFileId: undefined, retriedBatchId: "batch-retry-1" }),
+      downloadBatchResults: jest.fn(),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (prisma.brandLearning.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+    const result = await new CheckSynthesisBatch().execute("brand-1", "batch-1");
+
+    expect(result).toEqual({ done: false });
+    expect(prisma.brandLearning.updateMany).toHaveBeenCalledWith({
+      where: { brandId: "brand-1", openAiBatchId: "batch-1" },
+      data: { openAiBatchId: "batch-retry-1" },
+    });
+  });
+
   it("persists OpenAI's real validation error in insightError when getBatchStatus provides one", async () => {
     const openAI = {
       getBatchStatus: jest.fn().mockResolvedValue({
