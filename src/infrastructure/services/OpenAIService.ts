@@ -5,7 +5,11 @@ export class OpenAIService implements OpenAIBatchService {
   private client: OpenAI;
 
   constructor(apiKey: string, private model: string = "gpt-4o-mini") {
-    this.client = new OpenAI({ apiKey });
+    // organization/project must stay null: the openai SDK otherwise falls back to
+    // process.env.OPENAI_ORG_ID / OPENAI_PROJECT_ID, which would pin every brand's
+    // client (each with its own apiKey) to a single org/project via request headers,
+    // regardless of which org the apiKey actually belongs to.
+    this.client = new OpenAI({ apiKey, organization: null, project: null });
   }
 
   async submitBatch(requests: BatchRequest[]): Promise<string> {
