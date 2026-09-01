@@ -80,6 +80,45 @@ describe("OpenAIService", () => {
     });
   });
 
+  describe("submitBatch retry on batches.create failure", () => {
+    // OpenAI's Batch API can reject `batches.create` right after `files.create` succeeds
+    // (observed as "Cannot find file ..., or organization ... does not have access to it").
+    // A short backoff retry covers the case where this is transient (e.g. platform-side
+    // propagation delay) rather than a real permissions issue.
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("retries batches.create with backoff and succeeds once OpenAI accepts it", async () => {
+      batchesCreate
+        .mockRejectedValueOnce(new Error("Cannot find file file-abc123, or organization org-xyz does not have access to it."))
+        .mockResolvedValueOnce({ id: "batch-retried" });
+
+      const promise = service.submitBatch([{ customId: "a", systemPrompt: "s", userPrompt: "u" }]);
+      await jest.advanceTimersByTimeAsync(1000);
+
+      await expect(promise).resolves.toBe("batch-retried");
+      expect(batchesCreate).toHaveBeenCalledTimes(2);
+    });
+
+    it("propagates the error after exhausting all retry attempts", async () => {
+      batchesCreate.mockRejectedValue(new Error("Cannot find file file-abc123, or organization org-xyz does not have access to it."));
+
+      const promise = service.submitBatch([{ customId: "a", systemPrompt: "s", userPrompt: "u" }]);
+      const assertion = expect(promise).rejects.toThrow("Cannot find file");
+      await jest.advanceTimersByTimeAsync(1000);
+      await jest.advanceTimersByTimeAsync(2000);
+      await jest.advanceTimersByTimeAsync(4000);
+      await assertion;
+
+      expect(batchesCreate).toHaveBeenCalledTimes(4);
+    });
+  });
+
   describe("getBatchStatus", () => {
     // Per https://developers.openai.com/api/reference/resources/batches/methods/retrieve, a completed
     // batch carries BOTH output_file_id (successful lines) and error_file_id (per-line failures) —
@@ -102,6 +141,34 @@ describe("OpenAIService", () => {
       const result = await service.getBatchStatus("batch-1");
 
       expect(result).toEqual({ status: "validating", outputFileId: undefined, errorFileId: undefined });
+    });
+
+    // Per https://developers.openai.com/api/reference/resources/batches/methods/retrieve, a batch that
+    // fails validation carries an `errors.data[]` array with the real reason (code/message/line/param).
+    it("joins batch.errors.data into a human-readable errorDetail when validation fails", async () => {
+      batchesRetrieve.mockResolvedValue({
+        status: "failed",
+        output_file_id: null,
+        error_file_id: null,
+        errors: {
+          object: "list",
+          data: [
+            { code: "invalid_request", message: "Cannot find file file-abc123, or organization org-xyz does not have access to it.", line: null, param: null },
+          ],
+        },
+      });
+
+      const result = await service.getBatchStatus("batch-1");
+
+      expect(result.errorDetail).toBe("invalid_request: Cannot find file file-abc123, or organization org-xyz does not have access to it.");
+    });
+
+    it("leaves errorDetail undefined when batch.errors is absent or empty", async () => {
+      batchesRetrieve.mockResolvedValue({ status: "completed", output_file_id: "file-1", error_file_id: null, errors: null });
+
+      const result = await service.getBatchStatus("batch-1");
+
+      expect(result.errorDetail).toBeUndefined();
     });
   });
 

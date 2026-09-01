@@ -14,6 +14,7 @@ export interface IgTemplateUpdateData {
   variables?: string[];
   summary?: string;
   summaryStatus?: string;
+  summaryError?: string;
 }
 
 export interface IgTemplateRepository {

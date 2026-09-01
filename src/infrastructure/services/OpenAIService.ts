@@ -38,21 +38,35 @@ export class OpenAIService implements OpenAIBatchService {
       purpose: "batch",
     });
 
-    const batch = await this.client.batches.create({
-      input_file_id:    uploaded.id,
-      endpoint:         "/v1/chat/completions",
-      completion_window: "24h",
-    });
+    let batch;
+    const retryDelaysMs = [1000, 2000, 4000];
+    for (let attempt = 0; ; attempt++) {
+      try {
+        batch = await this.client.batches.create({
+          input_file_id:    uploaded.id,
+          endpoint:         "/v1/chat/completions",
+          completion_window: "24h",
+        });
+        break;
+      } catch (err) {
+        if (attempt >= retryDelaysMs.length) throw err;
+        await new Promise(resolve => setTimeout(resolve, retryDelaysMs[attempt]));
+      }
+    }
 
     return batch.id;
   }
 
-  async getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string; errorFileId?: string }> {
+  async getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string; errorFileId?: string; errorDetail?: string }> {
     const batch = await this.client.batches.retrieve(batchId);
+    const errorDetail = batch.errors?.data?.length
+      ? batch.errors.data.map(e => [e.code, e.message].filter(Boolean).join(": ")).join("; ")
+      : undefined;
     return {
       status:       batch.status,
       outputFileId: batch.output_file_id ?? undefined,
       errorFileId:  batch.error_file_id ?? undefined,
+      errorDetail,
     };
   }
 

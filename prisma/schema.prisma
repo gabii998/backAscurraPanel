@@ -524,6 +524,7 @@ model IgTemplate {
   variables     String[]
   summary       String     @default("")
   summaryStatus String     @default("pending")
+  summaryError  String     @default("")
   isAiGenerated Boolean    @default(false)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -607,6 +608,7 @@ model BrandLearning {
   brand         Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
   insights      String    @default("")
   insightStatus String    @default("pending")
+  insightError  String    @default("")
   openAiBatchId String?
   totalApproved Int       @default(0)
   totalRejected Int       @default(0)

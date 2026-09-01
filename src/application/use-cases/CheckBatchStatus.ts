@@ -31,10 +31,10 @@ export class CheckBatchStatus {
     if (!job.openAiBatchId) return job;
 
     const openAI = await resolveOpenAIService(job.brandId);
-    const { status, outputFileId, errorFileId } = await openAI.getBatchStatus(job.openAiBatchId);
+    const { status, outputFileId, errorFileId, errorDetail } = await openAI.getBatchStatus(job.openAiBatchId);
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
-      return this.jobRepo.update(jobId, { status: "failed", errorMessage: `OpenAI batch status: ${status}` });
+      return this.jobRepo.update(jobId, { status: "failed", errorMessage: errorDetail ?? `OpenAI batch status: ${status}` });
     }
 
     if (status !== "completed" || (!outputFileId && !errorFileId)) {

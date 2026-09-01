@@ -92,7 +92,32 @@ describe("CheckSynthesisBatch", () => {
     expect(result).toEqual({ done: false });
     expect(prisma.brandLearning.updateMany).toHaveBeenCalledWith({
       where: { brandId: "brand-1", openAiBatchId: "batch-1" },
-      data: { insightStatus: "pending" },
+      data: { insightStatus: "pending", insightError: "OpenAI batch status: expired" },
+    });
+  });
+
+  it("persists OpenAI's real validation error in insightError when getBatchStatus provides one", async () => {
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({
+        status: "failed",
+        outputFileId: undefined,
+        errorFileId: undefined,
+        errorDetail: "invalid_request: Cannot find file file-abc123, or organization org-xyz does not have access to it.",
+      }),
+      downloadBatchResults: jest.fn(),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (prisma.brandLearning.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+    const result = await new CheckSynthesisBatch().execute("brand-1", "batch-1");
+
+    expect(result).toEqual({ done: false });
+    expect(prisma.brandLearning.updateMany).toHaveBeenCalledWith({
+      where: { brandId: "brand-1", openAiBatchId: "batch-1" },
+      data: {
+        insightStatus: "pending",
+        insightError: "invalid_request: Cannot find file file-abc123, or organization org-xyz does not have access to it.",
+      },
     });
   });
 });

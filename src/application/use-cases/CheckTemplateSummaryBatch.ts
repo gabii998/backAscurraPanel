@@ -9,7 +9,12 @@ export class CheckTemplateSummaryBatch {
 
   async execute(openAiBatchId: string, brandId: string): Promise<{ updatedCount: number }> {
     const openAI = await resolveOpenAIService(brandId);
-    const { status, outputFileId, errorFileId } = await openAI.getBatchStatus(openAiBatchId);
+    const { status, outputFileId, errorFileId, errorDetail } = await openAI.getBatchStatus(openAiBatchId);
+
+    if (status === "failed" || status === "expired" || status === "cancelled") {
+      console.error(`[CheckTemplateSummaryBatch] batch=${openAiBatchId} status=${status} detail=${errorDetail ?? "n/a"}`);
+      return { updatedCount: 0 };
+    }
 
     if (status !== "completed" || (!outputFileId && !errorFileId)) return { updatedCount: 0 };
 

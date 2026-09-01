@@ -8,7 +8,7 @@ export class CheckIgExampleSummaryBatches {
       const openAI = await resolveOpenAIService(example.brandId);
       const batch = await openAI.getBatchStatus(example.summaryBatchId!);
       if (["failed", "expired", "cancelled"].includes(batch.status)) {
-        await prisma.igExamplePost.update({ where: { id: example.id }, data: { summaryStatus: "failed", summaryError: `OpenAI batch status: ${batch.status}` } });
+        await prisma.igExamplePost.update({ where: { id: example.id }, data: { summaryStatus: "failed", summaryError: batch.errorDetail ?? `OpenAI batch status: ${batch.status}` } });
         continue;
       }
       if (batch.status !== "completed" || (!batch.outputFileId && !batch.errorFileId)) continue;

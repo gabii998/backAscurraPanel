@@ -11,6 +11,7 @@ function mapTemplate(raw: Record<string, unknown>): IgTemplate {
     variables:     raw.variables     as string[],
     summary:       raw.summary       as string,
     summaryStatus: raw.summaryStatus as string,
+    summaryError:  raw.summaryError  as string,
     isAiGenerated: raw.isAiGenerated as boolean,
     createdAt:     raw.createdAt     as Date,
     updatedAt:     raw.updatedAt     as Date,
@@ -53,6 +54,7 @@ export class PrismaIgTemplateRepository implements IgTemplateRepository {
         ...(data.variables     !== undefined && { variables: data.variables }),
         ...(data.summary       !== undefined && { summary: data.summary }),
         ...(data.summaryStatus !== undefined && { summaryStatus: data.summaryStatus }),
+        ...(data.summaryError  !== undefined && { summaryError: data.summaryError }),
       },
     });
     return mapTemplate(raw as unknown as Record<string, unknown>);

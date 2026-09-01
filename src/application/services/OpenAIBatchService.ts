@@ -15,6 +15,6 @@ export interface BatchResult {
 
 export interface OpenAIBatchService {
   submitBatch(requests: BatchRequest[]): Promise<string>;
-  getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string; errorFileId?: string }>;
+  getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string; errorFileId?: string; errorDetail?: string }>;
   downloadBatchResults(outputFileId: string): Promise<BatchResult[]>;
 }

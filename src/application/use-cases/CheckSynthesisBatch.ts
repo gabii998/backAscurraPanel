@@ -6,12 +6,13 @@ import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenA
 export class CheckSynthesisBatch {
   async execute(brandId: string, openAiBatchId: string): Promise<{ done: boolean; insights?: string }> {
     const openAI = await resolveOpenAIService(brandId);
-    const { status, outputFileId, errorFileId } = await openAI.getBatchStatus(openAiBatchId);
+    const { status, outputFileId, errorFileId, errorDetail } = await openAI.getBatchStatus(openAiBatchId);
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
+      console.error(`[CheckSynthesisBatch] brand=${brandId} batch=${openAiBatchId} status=${status} detail=${errorDetail ?? "n/a"}`);
       await prisma.brandLearning.updateMany({
         where: { brandId, openAiBatchId },
-        data: { insightStatus: "pending" },
+        data: { insightStatus: "pending", insightError: errorDetail ?? `OpenAI batch status: ${status}` },
       });
       return { done: false };
     }

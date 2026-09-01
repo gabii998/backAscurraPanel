@@ -6,6 +6,7 @@ export interface IgTemplate {
   variables: string[];
   summary: string;
   summaryStatus: string;
+  summaryError: string;
   isAiGenerated: boolean;
   createdAt: Date;
   updatedAt: Date;
