@@ -11,8 +11,12 @@ export class CheckIgExampleSummaryBatches {
         await prisma.igExamplePost.update({ where: { id: example.id }, data: { summaryStatus: "failed", summaryError: `OpenAI batch status: ${batch.status}` } });
         continue;
       }
-      if (batch.status !== "completed" || !batch.outputFileId) continue;
-      const [result] = await openAI.downloadBatchResults(batch.outputFileId);
+      if (batch.status !== "completed" || (!batch.outputFileId && !batch.errorFileId)) continue;
+      const [outputResults, errorResults] = await Promise.all([
+        batch.outputFileId ? openAI.downloadBatchResults(batch.outputFileId) : Promise.resolve([]),
+        batch.errorFileId  ? openAI.downloadBatchResults(batch.errorFileId)  : Promise.resolve([]),
+      ]);
+      const [result] = [...outputResults, ...errorResults];
       let summary = "";
       try { summary = (JSON.parse(result?.content ?? "") as { summary?: string }).summary?.trim() ?? ""; } catch { /* invalid response below */ }
       await prisma.igExamplePost.update({ where: { id: example.id }, data: summary

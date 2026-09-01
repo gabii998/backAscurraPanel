@@ -15,6 +15,7 @@ export class RetryIgExampleSummary {
         systemPrompt: "Analizá esta referencia de Instagram. Respondé SOLO JSON válido con summary. Describí ÚNICAMENTE patrones abstractos: composición, paleta, jerarquía, tono, longitud, emojis, puntuación y estructura. No transcribas ni menciones texto visible, temas, marcas, productos, ofertas, hashtags, frases ni CTAs.",
         userPrompt: "Generá una ficha abstracta de estilo, sin conservar contenido de la publicación.",
         imageUrl: example.imageUrl,
+        responseFormat: "json",
       }]);
       return prisma.igExamplePost.update({ where: { id: example.id }, data: { summaryBatchId: batchId, summaryStatus: "processing" } });
     } catch {

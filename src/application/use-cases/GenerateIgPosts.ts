@@ -87,6 +87,7 @@ export class GenerateIgPosts {
       customId: `post-${i}`,
       systemPrompt,
       userPrompt: buildUserPrompt(topic, CONTENT_FORMATS[i % CONTENT_FORMATS.length]),
+      responseFormat: "json" as const,
     }));
 
     const openAI = await resolveOpenAIService(brandId);

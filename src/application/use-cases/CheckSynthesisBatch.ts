@@ -6,7 +6,7 @@ import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenA
 export class CheckSynthesisBatch {
   async execute(brandId: string, openAiBatchId: string): Promise<{ done: boolean; insights?: string }> {
     const openAI = await resolveOpenAIService(brandId);
-    const { status, outputFileId } = await openAI.getBatchStatus(openAiBatchId);
+    const { status, outputFileId, errorFileId } = await openAI.getBatchStatus(openAiBatchId);
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
       await prisma.brandLearning.updateMany({
@@ -16,12 +16,24 @@ export class CheckSynthesisBatch {
       return { done: false };
     }
 
-    if (status !== "completed" || !outputFileId) return { done: false };
+    if (status !== "completed" || (!outputFileId && !errorFileId)) return { done: false };
 
-    const results = await openAI.downloadBatchResults(outputFileId);
+    const [outputResults, errorResults] = await Promise.all([
+      outputFileId ? openAI.downloadBatchResults(outputFileId) : Promise.resolve([]),
+      errorFileId  ? openAI.downloadBatchResults(errorFileId)  : Promise.resolve([]),
+    ]);
+    const results = [...outputResults, ...errorResults];
     const result = results.find(r => r.customId === `synthesis-${brandId}`);
 
-    if (!result || result.error) return { done: false };
+    if (!result) return { done: false };
+    if (result.error) {
+      console.error(`[CheckSynthesisBatch] brand=${brandId} batch=${openAiBatchId} error=${result.error}`);
+      await prisma.brandLearning.updateMany({
+        where: { brandId, openAiBatchId },
+        data: { insightStatus: "pending" },
+      });
+      return { done: false };
+    }
 
     const insights = result.content.trim();
     const now = new Date();

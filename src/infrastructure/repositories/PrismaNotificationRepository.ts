@@ -39,4 +39,8 @@ export class PrismaNotificationRepository implements NotificationRepository {
   async markAllRead(userId: string): Promise<void> {
     await prisma.notification.updateMany({ where: { userId, read: false }, data: { read: true } });
   }
+
+  async deleteAllByUser(userId: string): Promise<void> {
+    await prisma.notification.deleteMany({ where: { userId } });
+  }
 }

@@ -6,4 +6,5 @@ export interface NotificationRepository {
   countUnread(userId: string): Promise<number>;
   markRead(id: string, userId: string): Promise<void>;
   markAllRead(userId: string): Promise<void>;
+  deleteAllByUser(userId: string): Promise<void>;
 }

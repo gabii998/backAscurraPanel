@@ -78,6 +78,7 @@ import { GetNotifications } from "../../../application/use-cases/GetNotification
 import { GetUnreadCount } from "../../../application/use-cases/GetUnreadCount";
 import { MarkNotificationRead } from "../../../application/use-cases/MarkNotificationRead";
 import { MarkAllNotificationsRead } from "../../../application/use-cases/MarkAllNotificationsRead";
+import { ClearAllNotifications } from "../../../application/use-cases/ClearAllNotifications";
 import { NotificationDispatcher } from "../../../application/services/NotificationDispatcher";
 import { PrismaNotificationRepository } from "../../repositories/PrismaNotificationRepository";
 import { PrismaProspectRepository } from "../../repositories/PrismaProspectRepository";
@@ -304,8 +305,9 @@ export const buildServer = (): Express => {
   const getUnreadCount           = new GetUnreadCount(notificationRepository);
   const markNotificationRead     = new MarkNotificationRead(notificationRepository);
   const markAllNotificationsRead = new MarkAllNotificationsRead(notificationRepository);
+  const clearAllNotifications    = new ClearAllNotifications(notificationRepository);
   const notificationDispatcher   = new NotificationDispatcher(userRepository, createNotification);
-  const notificationController   = new NotificationController(getNotifications, getUnreadCount, markNotificationRead, markAllNotificationsRead);
+  const notificationController   = new NotificationController(getNotifications, getUnreadCount, markNotificationRead, markAllNotificationsRead, clearAllNotifications);
 
   // Project use cases + controller
   const createProject = new CreateProject(projectRepository);

@@ -3,6 +3,7 @@ export interface BatchRequest {
   systemPrompt: string;
   userPrompt: string;
   imageUrl?: string;
+  responseFormat?: "json" | "text";
 }
 
 export interface BatchResult {
@@ -14,6 +15,6 @@ export interface BatchResult {
 
 export interface OpenAIBatchService {
   submitBatch(requests: BatchRequest[]): Promise<string>;
-  getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string }>;
+  getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string; errorFileId?: string }>;
   downloadBatchResults(outputFileId: string): Promise<BatchResult[]>;
 }

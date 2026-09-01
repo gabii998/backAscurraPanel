@@ -3,6 +3,7 @@ import type { GetNotifications } from "../../../application/use-cases/GetNotific
 import type { GetUnreadCount } from "../../../application/use-cases/GetUnreadCount";
 import type { MarkNotificationRead } from "../../../application/use-cases/MarkNotificationRead";
 import type { MarkAllNotificationsRead } from "../../../application/use-cases/MarkAllNotificationsRead";
+import type { ClearAllNotifications } from "../../../application/use-cases/ClearAllNotifications";
 import type { AuthRequest } from "../../../infrastructure/http/express/middleware/authMiddleware";
 
 export class NotificationController {
@@ -10,7 +11,8 @@ export class NotificationController {
     private readonly getNotifications: GetNotifications,
     private readonly getUnreadCount: GetUnreadCount,
     private readonly markNotificationRead: MarkNotificationRead,
-    private readonly markAllNotificationsRead: MarkAllNotificationsRead
+    private readonly markAllNotificationsRead: MarkAllNotificationsRead,
+    private readonly clearAllNotifications: ClearAllNotifications
   ) {}
 
   // GET /notifications
@@ -38,6 +40,13 @@ export class NotificationController {
   async handleMarkAllRead(req: Request, res: Response): Promise<void> {
     const { userId } = (req as AuthRequest).user;
     await this.markAllNotificationsRead.execute(userId);
+    res.status(204).send();
+  }
+
+  // DELETE /notifications
+  async handleClearAll(req: Request, res: Response): Promise<void> {
+    const { userId } = (req as AuthRequest).user;
+    await this.clearAllNotifications.execute(userId);
     res.status(204).send();
   }
 }

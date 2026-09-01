@@ -24,7 +24,7 @@ export class OpenAIService implements OpenAIBatchService {
             ] : r.userPrompt },
           ],
           temperature: 0.8,
-          response_format: { type: "json_object" },
+          ...(r.responseFormat === "json" ? { response_format: { type: "json_object" } } : {}),
         },
       }),
     );
@@ -47,11 +47,12 @@ export class OpenAIService implements OpenAIBatchService {
     return batch.id;
   }
 
-  async getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string }> {
+  async getBatchStatus(batchId: string): Promise<{ status: string; outputFileId?: string; errorFileId?: string }> {
     const batch = await this.client.batches.retrieve(batchId);
     return {
       status:       batch.status,
       outputFileId: batch.output_file_id ?? undefined,
+      errorFileId:  batch.error_file_id ?? undefined,
     };
   }
 

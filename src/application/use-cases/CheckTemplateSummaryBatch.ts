@@ -9,11 +9,15 @@ export class CheckTemplateSummaryBatch {
 
   async execute(openAiBatchId: string, brandId: string): Promise<{ updatedCount: number }> {
     const openAI = await resolveOpenAIService(brandId);
-    const { status, outputFileId } = await openAI.getBatchStatus(openAiBatchId);
+    const { status, outputFileId, errorFileId } = await openAI.getBatchStatus(openAiBatchId);
 
-    if (status !== "completed" || !outputFileId) return { updatedCount: 0 };
+    if (status !== "completed" || (!outputFileId && !errorFileId)) return { updatedCount: 0 };
 
-    const results = await openAI.downloadBatchResults(outputFileId);
+    const [outputResults, errorResults] = await Promise.all([
+      outputFileId ? openAI.downloadBatchResults(outputFileId) : Promise.resolve([]),
+      errorFileId  ? openAI.downloadBatchResults(errorFileId)  : Promise.resolve([]),
+    ]);
+    const results = [...outputResults, ...errorResults];
     let updatedCount = 0;
     let totalInput = 0;
     let totalOutput = 0;
@@ -23,8 +27,12 @@ export class CheckTemplateSummaryBatch {
         totalInput  += result.usage.promptTokens;
         totalOutput += result.usage.completionTokens;
       }
-      if (result.error) continue;
       const templateId = result.customId.replace("summary-", "");
+      if (result.error) {
+        console.error(`[CheckTemplateSummaryBatch] template=${templateId} error=${result.error}`);
+        await this.templateRepo.update(templateId, { summaryStatus: "pending" });
+        continue;
+      }
       await this.templateRepo.update(templateId, {
         summary: result.content.trim(),
         summaryStatus: "done",

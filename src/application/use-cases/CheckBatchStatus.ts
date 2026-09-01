@@ -31,17 +31,22 @@ export class CheckBatchStatus {
     if (!job.openAiBatchId) return job;
 
     const openAI = await resolveOpenAIService(job.brandId);
-    const { status, outputFileId } = await openAI.getBatchStatus(job.openAiBatchId);
+    const { status, outputFileId, errorFileId } = await openAI.getBatchStatus(job.openAiBatchId);
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
       return this.jobRepo.update(jobId, { status: "failed", errorMessage: `OpenAI batch status: ${status}` });
     }
 
-    if (status !== "completed" || !outputFileId) {
+    if (status !== "completed" || (!outputFileId && !errorFileId)) {
       return this.jobRepo.update(jobId, { status: "processing" });
     }
 
-    const results = await openAI.downloadBatchResults(outputFileId);
+    const [outputResults, errorResults] = await Promise.all([
+      outputFileId ? openAI.downloadBatchResults(outputFileId) : Promise.resolve([]),
+      errorFileId  ? openAI.downloadBatchResults(errorFileId)  : Promise.resolve([]),
+    ]);
+    const results = [...outputResults, ...errorResults];
+    const resultsByCustomId = new Map(results.map(r => [r.customId, r]));
     const posts = await this.postRepo.findByBatchJobId(jobId);
     const assets = job.contentAssetIds.length > 0
       ? await prisma.igExamplePost.findMany({ where: { brandId: job.brandId, id: { in: job.contentAssetIds } }, select: { id: true, imageUrl: true } })
@@ -51,9 +56,10 @@ export class CheckBatchStatus {
     let totalInput = 0;
     let totalOutput = 0;
 
-    for (let i = 0; i < results.length && i < posts.length; i++) {
-      const result = results[i];
+    for (let i = 0; i < posts.length; i++) {
+      const result = resultsByCustomId.get(`post-${i}`);
       const post = posts[i];
+      if (!result) continue;
 
       if (result.usage) {
         totalInput  += result.usage.promptTokens;

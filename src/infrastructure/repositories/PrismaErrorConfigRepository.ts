@@ -20,22 +20,23 @@ export class PrismaErrorConfigRepository implements ErrorConfigRepository {
       include: { apiKey: { select: { prefix: true } } },
       orderBy: { createdAt: "desc" },
     });
+    if (records.length === 0) return [];
 
-    return Promise.all(
-      records.map(async (r) => {
-        const errorCount = await prisma.appError.count({
-          where: { errorConfigId: r.id, deletedAt: null },
-        });
-        return {
-          id:           r.id,
-          name:         r.name,
-          apiKeyId:     r.apiKeyId,
-          createdAt:    r.createdAt,
-          apiKeyPrefix: r.apiKey?.prefix ?? null,
-          errorCount,
-        };
-      })
-    );
+    const counts = await prisma.appError.groupBy({
+      by: ["errorConfigId"],
+      where: { deletedAt: null, errorConfigId: { in: records.map((r) => r.id) } },
+      _count: { _all: true },
+    });
+    const countByConfigId = new Map(counts.map((c) => [c.errorConfigId, c._count._all]));
+
+    return records.map((r) => ({
+      id:           r.id,
+      name:         r.name,
+      apiKeyId:     r.apiKeyId,
+      createdAt:    r.createdAt,
+      apiKeyPrefix: r.apiKey?.prefix ?? null,
+      errorCount:   countByConfigId.get(r.id) ?? 0,
+    }));
   }
 
   async getById(id: string): Promise<ErrorConfigDetail | null> {

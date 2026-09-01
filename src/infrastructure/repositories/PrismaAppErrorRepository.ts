@@ -36,12 +36,8 @@ export class PrismaAppErrorRepository implements AppErrorRepository {
       orderBy: { lastSeen: "desc" },
     });
 
-    return Promise.all(
-      rows.map(async (r) => {
-        const sparkline = await this.getSparkline(r.id);
-        return this.toEntity(r, sparkline);
-      })
-    );
+    const sparklines = await this.getSparklines(rows.map((r) => r.id));
+    return rows.map((r) => this.toEntity(r, sparklines.get(r.id) ?? new Array(7).fill(0)));
   }
 
   async create(error: AppError): Promise<AppError> {
@@ -103,23 +99,51 @@ export class PrismaAppErrorRepository implements AppErrorRepository {
   }
 
   async getSparkline(errorId: string): Promise<number[]> {
-    const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-
     const occurrences = await prisma.errorOccurrence.findMany({
-      where: { errorId, createdAt: { gte: sevenDaysAgo } },
+      where: { errorId, createdAt: { gte: this.sevenDaysAgo() } },
       select: { createdAt: true },
     });
+    return this.bucketByDay(occurrences);
+  }
 
-    return Array.from({ length: 7 }, (_, i) => {
-      const day = new Date(now);
-      day.setDate(day.getDate() - (6 - i));
-      day.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(day);
-      dayEnd.setHours(23, 59, 59, 999);
-      return occurrences.filter((o) => o.createdAt >= day && o.createdAt <= dayEnd).length;
+  private async getSparklines(errorIds: string[]): Promise<Map<string, number[]>> {
+    const map = new Map<string, number[]>(errorIds.map((id) => [id, new Array(7).fill(0)]));
+    if (errorIds.length === 0) return map;
+
+    const occurrences = await prisma.errorOccurrence.findMany({
+      where: { errorId: { in: errorIds }, createdAt: { gte: this.sevenDaysAgo() } },
+      select: { errorId: true, createdAt: true },
     });
+
+    const days = this.dayBoundaries();
+    for (const occ of occurrences) {
+      const idx = days.findIndex((d) => occ.createdAt >= d.start && occ.createdAt <= d.end);
+      if (idx !== -1) map.get(occ.errorId)![idx] += 1;
+    }
+    return map;
+  }
+
+  private sevenDaysAgo(): Date {
+    const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    return sevenDaysAgo;
+  }
+
+  private dayBoundaries(): { start: Date; end: Date }[] {
+    const now = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const start = new Date(now);
+      start.setDate(start.getDate() - (6 - i));
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    });
+  }
+
+  private bucketByDay(occurrences: { createdAt: Date }[]): number[] {
+    const days = this.dayBoundaries();
+    return days.map((d) => occurrences.filter((o) => o.createdAt >= d.start && o.createdAt <= d.end).length);
   }
 
   async isUserKnown(errorId: string, userId: string): Promise<boolean> {

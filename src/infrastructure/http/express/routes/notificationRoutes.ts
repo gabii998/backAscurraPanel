@@ -12,6 +12,7 @@ export const buildNotificationRoutes = (
   router.get("/notifications/unread-count", authMiddleware, wrapRequestHandler(controller.handleUnreadCount.bind(controller)));
   router.patch("/notifications/read-all", authMiddleware, wrapRequestHandler(controller.handleMarkAllRead.bind(controller)));
   router.patch("/notifications/:id/read", authMiddleware, wrapRequestHandler(controller.handleMarkRead.bind(controller)));
+  router.delete("/notifications", authMiddleware, wrapRequestHandler(controller.handleClearAll.bind(controller)));
 
   return router;
 };
