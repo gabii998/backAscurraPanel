@@ -81,6 +81,42 @@ describe("OpenAIService", () => {
     });
   });
 
+  describe("submitBatch image URL normalization", () => {
+    // Reproduces a real production failure: a handful of IgExamplePost rows were persisted
+    // with an imageUrl missing its scheme (e.g. "instabucket.ascurra-soluciones.com/..."
+    // instead of "https://instabucket...."), and OpenAI's batch API rejected every one of
+    // them with "Failed to download file. File URL is invalid." instead of a normal
+    // per-line error — so every retry kept failing the exact same way forever.
+    it("prefixes https:// onto an imageUrl that's missing its scheme", async () => {
+      await service.submitBatch([{
+        customId: "example-summary-1",
+        systemPrompt: "Analizá esta imagen. Respondé SOLO JSON.",
+        userPrompt: "Generá una ficha de estilo.",
+        imageUrl: "instabucket.ascurra-soluciones.com/instagram/brand-1/references/example-1/image.webp",
+        responseFormat: "json",
+      }]);
+
+      const [line] = await submittedLines();
+      expect(line.body.messages[1].content[1].image_url.url).toBe(
+        "https://instabucket.ascurra-soluciones.com/instagram/brand-1/references/example-1/image.webp",
+      );
+    });
+
+    it("leaves an imageUrl that already has a scheme untouched", async () => {
+      await service.submitBatch([{
+        customId: "example-summary-2",
+        systemPrompt: "s",
+        userPrompt: "u",
+        imageUrl: "https://instabucket.ascurra-soluciones.com/instagram/brand-1/references/example-2/image.webp",
+      }]);
+
+      const [line] = await submittedLines();
+      expect(line.body.messages[1].content[1].image_url.url).toBe(
+        "https://instabucket.ascurra-soluciones.com/instagram/brand-1/references/example-2/image.webp",
+      );
+    });
+  });
+
   describe("submitBatch waits for the uploaded file to leave status 'uploaded'", () => {
     // A freshly uploaded file starts as status "uploaded" and OpenAI processes it
     // asynchronously; batches.create can fail to find it while it's still in that state.
