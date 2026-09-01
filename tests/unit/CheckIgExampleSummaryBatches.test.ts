@@ -126,6 +126,56 @@ describe("CheckIgExampleSummaryBatches", () => {
     });
   });
 
+  it("falls back to the whole parsed object when the model drops the `summary` wrapper key", async () => {
+    // Real production shape: the model follows the category instructions (composición,
+    // paleta, ...) but returns them directly at the top level instead of nested under
+    // a `summary` key — previously this was discarded and marked INVALID_SUMMARY_RESULT
+    // even though the JSON was well-formed and the batch completed successfully.
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
+      { id: "example-1", brandId: "brand-1", summaryBatchId: "batch-1" },
+    ]);
+    (prisma.igExamplePost.update as jest.Mock).mockResolvedValue({});
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out", errorFileId: undefined }),
+      downloadBatchResults: jest.fn().mockResolvedValue([{
+        customId: "example-summary-example-1",
+        content: JSON.stringify({ composición: "Formato vertical.", paleta: "Blanco y azul." }),
+        error: undefined,
+      }]),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
+
+    await new CheckIgExampleSummaryBatches().executeAll();
+
+    expect(prisma.igExamplePost.update).toHaveBeenCalledWith({
+      where: { id: "example-1" },
+      data: { styleSummary: "composición: Formato vertical.\npaleta: Blanco y azul.", summaryStatus: "done", summaryError: "" },
+    });
+  });
+
+  it("still marks the example failed when the model returns no analyzable content at all", async () => {
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
+      { id: "example-1", brandId: "brand-1", summaryBatchId: "batch-1" },
+    ]);
+    (prisma.igExamplePost.update as jest.Mock).mockResolvedValue({});
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out", errorFileId: undefined }),
+      downloadBatchResults: jest.fn().mockResolvedValue([{
+        customId: "example-summary-example-1",
+        content: "",
+        error: "Refusal: I can't help with that image.",
+      }]),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
+
+    await new CheckIgExampleSummaryBatches().executeAll();
+
+    expect(prisma.igExamplePost.update).toHaveBeenCalledWith({
+      where: { id: "example-1" },
+      data: { summaryStatus: "failed", summaryError: "Refusal: I can't help with that image." },
+    });
+  });
+
   it("logs the token cost of the summary batch even though CheckIgExampleSummaryBatches previously never tracked it", async () => {
     (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
       { id: "example-1", brandId: "brand-1", summaryBatchId: "batch-1" },
@@ -156,6 +206,33 @@ describe("CheckIgExampleSummaryBatches", () => {
       }),
     });
     expect((prisma.igCostLog.create as jest.Mock).mock.calls[0][0].data.estimatedCostUsd).toBeGreaterThan(0);
+  });
+
+  it("isolates a failure on one example so the rest of the batch still gets checked", async () => {
+    // A single stuck/erroring example (rotated key, expired batch, transient OpenAI error)
+    // must not poison the whole brand's refresh and hide every other example's updates.
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
+      { id: "example-broken", brandId: "brand-1", summaryBatchId: "batch-broken" },
+      { id: "example-ok", brandId: "brand-1", summaryBatchId: "batch-ok" },
+    ]);
+    (prisma.igExamplePost.update as jest.Mock).mockResolvedValue({});
+    const openAI = {
+      getBatchStatus: jest.fn().mockRejectedValue(new Error("BRAND_OPENAI_KEY_NOT_CONFIGURED")),
+    };
+    (resolveOpenAIService as jest.Mock)
+      .mockRejectedValueOnce(new Error("BRAND_OPENAI_KEY_NOT_CONFIGURED"))
+      .mockResolvedValueOnce({ service: openAI, keySnapshot: "enc-key", model: "gpt-5.6-luna" });
+    openAI.getBatchStatus.mockResolvedValue({ status: "expired", outputFileId: undefined, errorFileId: undefined });
+
+    await expect(new CheckIgExampleSummaryBatches().executeAll()).resolves.not.toThrow();
+
+    expect(prisma.igExamplePost.update).toHaveBeenCalledWith({
+      where: { id: "example-ok" },
+      data: { summaryStatus: "failed", summaryError: "OpenAI batch status: expired" },
+    });
+    expect(prisma.igExamplePost.update).not.toHaveBeenCalledWith(expect.objectContaining({ where: { id: "example-broken" } }));
+    (console.error as jest.Mock).mockRestore();
   });
 
   it("executeForBrand only queries pending examples scoped to the given brand", async () => {

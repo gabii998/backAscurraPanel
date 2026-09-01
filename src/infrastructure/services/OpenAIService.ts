@@ -149,7 +149,7 @@ export class OpenAIService implements OpenAIBatchService {
           custom_id: string;
           response?: {
             body?: {
-              choices?: Array<{ message?: { content?: string } }>;
+              choices?: Array<{ message?: { content?: string; refusal?: string } }>;
               usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
               error?: { message: string };
             };
@@ -157,14 +157,18 @@ export class OpenAIService implements OpenAIBatchService {
           error?: { message: string };
         };
 
-        const content = normalizeOverEscapedJson(parsed.response?.body?.choices?.[0]?.message?.content ?? "");
+        const message = parsed.response?.body?.choices?.[0]?.message;
+        const content = normalizeOverEscapedJson(message?.content ?? "");
         const rawUsage = parsed.response?.body?.usage;
         results.push({
           customId: parsed.custom_id,
           content,
           // A per-line HTTP-level rejection (e.g. an unsupported request param) lands
           // its message inside response.body.error, not the top-level error field.
-          error: parsed.error?.message ?? parsed.response?.body?.error?.message,
+          // A vision-safety refusal instead leaves `content` empty and puts its reason in
+          // `message.refusal` — surface that too, or a bare empty completion just reads as
+          // an opaque "invalid response" downstream with no way to tell why.
+          error: parsed.error?.message ?? parsed.response?.body?.error?.message ?? (!content && message?.refusal ? `Refusal: ${message.refusal}` : undefined),
           usage: rawUsage
             ? {
                 promptTokens:     rawUsage.prompt_tokens,

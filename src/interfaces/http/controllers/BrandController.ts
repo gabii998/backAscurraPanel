@@ -148,7 +148,11 @@ export class BrandController {
   };
 
   handleCheckExampleSummaries = async (req: Request, res: Response): Promise<void> => {
-    await this.checkIgExampleSummaries.executeForBrand(req.params.id);
+    try {
+      await this.checkIgExampleSummaries.executeForBrand(req.params.id);
+    } catch (err) {
+      console.error("handleCheckExampleSummaries: check failed, returning current list anyway", err);
+    }
     res.json(await this.listIgExamplePosts.execute(req.params.id));
   };
 

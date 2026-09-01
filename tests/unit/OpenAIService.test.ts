@@ -375,6 +375,31 @@ describe("OpenAIService", () => {
       expect(result.error).toContain("json_object");
     });
 
+    it("surfaces a vision-safety refusal (empty content, message.refusal set) as a diagnostic error instead of leaving it opaque", async () => {
+      // A refusal is a normal 200-status completion — the batch line carries no top-level
+      // or response.body error — but `message.content` is empty and the reason lives in
+      // `message.refusal` instead. Previously this surfaced as an unexplained empty result.
+      const refusalLine = JSON.stringify({
+        id: "batch_req_123",
+        custom_id: "example-summary-example-1",
+        response: {
+          status_code: 200,
+          request_id: "req_123",
+          body: {
+            id: "chatcmpl-123",
+            choices: [{ index: 0, message: { role: "assistant", content: null, refusal: "I can't help with that image." }, finish_reason: "stop" }],
+          },
+        },
+        error: null,
+      });
+      filesContent.mockResolvedValue({ text: async () => refusalLine });
+
+      const [result] = await service.downloadBatchResults("file-refusal");
+
+      expect(result.content).toBe("");
+      expect(result.error).toBe("Refusal: I can't help with that image.");
+    });
+
     it("parses OpenAI's documented batch_expired error shape", async () => {
       const expiredLine = JSON.stringify({
         id: "batch_req_123",
