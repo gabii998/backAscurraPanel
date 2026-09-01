@@ -13,6 +13,13 @@ export class UpdateIgTemplate {
   async execute(id: string, input: UpdateIgTemplateInput): Promise<IgTemplate> {
     const exists = await this.repo.findById(id);
     if (!exists) throw new Error("TEMPLATE_NOT_FOUND");
-    return this.repo.update(id, { ...input, summary: "", summaryStatus: "pending" });
+    // The summary describes the HTML's visual design, so it only goes stale when the
+    // HTML itself changes — a rename (or a variables-only edit) shouldn't force a
+    // re-summarize and shouldn't knock a ready-to-use template back to "pending".
+    const invalidatesSummary = input.html !== undefined && input.html !== exists.html;
+    return this.repo.update(id, {
+      ...input,
+      ...(invalidatesSummary && { summary: "", summaryStatus: "pending" }),
+    });
   }
 }
