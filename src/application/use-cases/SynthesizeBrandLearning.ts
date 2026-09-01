@@ -31,7 +31,7 @@ export class SynthesizeBrandLearning {
 
     const userPrompt = `Posts APROBADOS (ordenados por engagement descendente):\n${approvedText}\n\nPosts RECHAZADOS (con motivo de rechazo):\n${rejectedText}`;
 
-    const openAI = await resolveOpenAIService(brandId);
+    const { service: openAI, keySnapshot } = await resolveOpenAIService(brandId);
     const batchId = await openAI.submitBatch([{
       customId: `synthesis-${brandId}`,
       systemPrompt,
@@ -44,10 +44,12 @@ export class SynthesizeBrandLearning {
         brandId,
         insightStatus: "processing",
         openAiBatchId: batchId,
+        openAiKeySnapshot: keySnapshot,
       },
       update: {
         insightStatus: "processing",
         openAiBatchId: batchId,
+        openAiKeySnapshot: keySnapshot,
       },
     });
 

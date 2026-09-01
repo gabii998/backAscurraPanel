@@ -4,15 +4,12 @@ import type { IgTemplateRepository } from "../../domain/repositories/IgTemplateR
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
 import { prisma } from "../../infrastructure/db/prisma";
-import { env } from "../../config/env";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 interface PostResult {
   caption: string;
   hashtags: string[];
   templateId: string | null;
-  templateHtml: string | null;
-  templateName: string | null;
   variables: Record<string, string>;
 }
 
@@ -30,11 +27,11 @@ export class CheckBatchStatus {
     if (job.status === "completed" || job.status === "failed") return job;
     if (!job.openAiBatchId) return job;
 
-    const openAI = await resolveOpenAIService(job.brandId);
+    const { service: openAI, keySnapshot, model } = await resolveOpenAIService(job.brandId, job.openAiKeySnapshot);
     const { status, outputFileId, errorFileId, errorDetail, retriedBatchId } = await openAI.getBatchStatus(job.openAiBatchId);
 
     if (retriedBatchId) {
-      return this.jobRepo.update(jobId, { openAiBatchId: retriedBatchId, status: "processing" });
+      return this.jobRepo.update(jobId, { openAiBatchId: retriedBatchId, openAiKeySnapshot: keySnapshot, status: "processing" });
     }
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
@@ -72,6 +69,10 @@ export class CheckBatchStatus {
 
       if (result.error) continue;
 
+      const postCostUsd = result.usage
+        ? calculateBatchCost(model, result.usage.promptTokens, result.usage.completionTokens)
+        : 0;
+
       let parsed: PostResult;
       try {
         parsed = JSON.parse(result.content) as PostResult;
@@ -79,20 +80,7 @@ export class CheckBatchStatus {
         continue;
       }
 
-      let templateId = parsed.templateId ?? null;
-
-      if (!templateId && parsed.templateHtml && parsed.templateName) {
-        const html = parsed.templateHtml;
-        const variables = extractVariables(html);
-        const created = await this.templateRepo.create({
-          brandId: post.brandId,
-          name: parsed.templateName,
-          html,
-          variables,
-          isAiGenerated: true,
-        });
-        templateId = created.id;
-      }
+      const templateId = parsed.templateId ?? null;
 
       await this.postRepo.update(post.id, {
         caption: parsed.caption ?? "",
@@ -104,17 +92,20 @@ export class CheckBatchStatus {
         },
         templateId,
         status: "draft",
+        inputTokens: result.usage?.promptTokens ?? 0,
+        outputTokens: result.usage?.completionTokens ?? 0,
+        estimatedCostUsd: postCostUsd,
       });
     }
 
-    const estimatedCostUsd = calculateBatchCost(env.openAiModel, totalInput, totalOutput);
+    const estimatedCostUsd = calculateBatchCost(model, totalInput, totalOutput);
 
     await prisma.igCostLog.create({
       data: {
         brandId:          job.brandId,
         operation:        "post_generation",
         entityId:         jobId,
-        model:            env.openAiModel,
+        model,
         inputTokens:      totalInput,
         outputTokens:     totalOutput,
         totalTokens:      totalInput + totalOutput,
@@ -130,9 +121,4 @@ export class CheckBatchStatus {
       estimatedCostUsd,
     });
   }
-}
-
-function extractVariables(html: string): string[] {
-  const matches = html.match(/\{\{(\w+)\}\}/g) ?? [];
-  return [...new Set(matches.map(m => m.replace(/\{\{|\}\}/g, "")))];
 }

@@ -25,6 +25,9 @@ function mapPost(raw: Record<string, unknown>): IgPost {
     igEngagement:     (raw.igEngagement    as number) ?? 0,
     igSaved:          (raw.igSaved         as number) ?? 0,
     igSyncedAt:       raw.igSyncedAt       as Date | null,
+    inputTokens:      (raw.inputTokens     as number) ?? 0,
+    outputTokens:     (raw.outputTokens    as number) ?? 0,
+    estimatedCostUsd: (raw.estimatedCostUsd as number) ?? 0,
     createdAt:        raw.createdAt        as Date,
     updatedAt:        raw.updatedAt        as Date,
   };
@@ -104,6 +107,9 @@ export class PrismaIgPostRepository implements IgPostRepository {
         ...(data.igEngagement     !== undefined && { igEngagement: data.igEngagement }),
         ...(data.igSaved          !== undefined && { igSaved: data.igSaved }),
         ...(data.igSyncedAt       !== undefined && { igSyncedAt: data.igSyncedAt }),
+        ...(data.inputTokens      !== undefined && { inputTokens: data.inputTokens }),
+        ...(data.outputTokens     !== undefined && { outputTokens: data.outputTokens }),
+        ...(data.estimatedCostUsd !== undefined && { estimatedCostUsd: data.estimatedCostUsd }),
       },
     });
     return mapPost(raw as unknown as Record<string, unknown>);

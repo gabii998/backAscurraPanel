@@ -1,17 +1,16 @@
-export interface IgBatchJob {
+export interface IgTemplateGenerationJob {
   id: string;
   brandId: string;
   openAiBatchId: string | null;
   openAiKeySnapshot: string | null;
   prompt: string;
+  styleDirection: string;
   status: string;
-  postCount: number;
+  templateCount: number;
   errorMessage: string;
   inputTokens: number;
   outputTokens: number;
   estimatedCostUsd: number;
-  contentAssetIds: string[];
-  brandLogoUrl: string;
   createdAt: Date;
   updatedAt: Date;
 }

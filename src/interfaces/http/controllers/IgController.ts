@@ -8,6 +8,10 @@ import type { GenerateIgPosts } from "../../../application/use-cases/GenerateIgP
 import type { CheckBatchStatus } from "../../../application/use-cases/CheckBatchStatus";
 import type { SummarizeIgTemplates } from "../../../application/use-cases/SummarizeIgTemplates";
 import type { CheckTemplateSummaryBatch } from "../../../application/use-cases/CheckTemplateSummaryBatch";
+import type { CheckTemplateSummaryBatches } from "../../../application/use-cases/CheckTemplateSummaryBatches";
+import type { GenerateIgTemplates } from "../../../application/use-cases/GenerateIgTemplates";
+import type { CheckTemplateGenerationJob } from "../../../application/use-cases/CheckTemplateGenerationJob";
+import type { ListIgTemplateGenerationJobs } from "../../../application/use-cases/ListIgTemplateGenerationJobs";
 import type { ListIgPosts } from "../../../application/use-cases/ListIgPosts";
 import type { GetIgPost } from "../../../application/use-cases/GetIgPost";
 import type { ApproveIgPost } from "../../../application/use-cases/ApproveIgPost";
@@ -35,6 +39,10 @@ export class IgController {
     private checkBatchStatus:          CheckBatchStatus,
     private summarizeIgTemplates:      SummarizeIgTemplates,
     private checkTemplateSummaryBatch: CheckTemplateSummaryBatch,
+    private checkTemplateSummaryBatches: CheckTemplateSummaryBatches,
+    private generateIgTemplates:          GenerateIgTemplates,
+    private checkTemplateGenerationJob:   CheckTemplateGenerationJob,
+    private listIgTemplateGenerationJobs: ListIgTemplateGenerationJobs,
     private listIgPosts:               ListIgPosts,
     private getIgPost:                 GetIgPost,
     private approveIgPost:             ApproveIgPost,
@@ -126,15 +134,13 @@ export class IgController {
   };
 
   handleGenerate = async (req: Request, res: Response): Promise<void> => {
-    const { quantity, topic, forceTemplateId, referencePostIds, styleReferenceIds, contentAssetIds, campaignContext } = req.body as Record<string, unknown>;
+    const { quantity, topic, forceTemplateId, contentAssetIds, campaignContext } = req.body as Record<string, unknown>;
     try {
       const job = await this.generateIgPosts.execute({
         brandId:         req.params.brandId,
         quantity:        typeof quantity === "number" ? quantity : parseInt(String(quantity || "1"), 10),
         topic:           typeof topic === "string" ? topic : undefined,
         forceTemplateId: typeof forceTemplateId === "string" ? forceTemplateId : undefined,
-        referencePostIds: Array.isArray(referencePostIds) ? referencePostIds.filter((id): id is string => typeof id === "string") : [],
-        styleReferenceIds: Array.isArray(styleReferenceIds) ? styleReferenceIds.filter((id): id is string => typeof id === "string") : undefined,
         contentAssetIds: Array.isArray(contentAssetIds) ? contentAssetIds.filter((id): id is string => typeof id === "string") : [],
         campaignContext: typeof campaignContext === "string" ? campaignContext : undefined,
       });
@@ -144,7 +150,8 @@ export class IgController {
         if (err.message === "BRAND_NOT_FOUND")   { res.status(404).json({ message: err.message }); return; }
         if (err.message === "INVALID_QUANTITY")  { res.status(400).json({ message: err.message }); return; }
         if (err.message === "INVALID_REFERENCE_POSTS") { res.status(400).json({ message: err.message }); return; }
-        if (err.message === "TEMPLATE_NOT_ASSET_COMPATIBLE") { res.status(400).json({ message: err.message }); return; }
+        if (err.message === "NO_TEMPLATES_AVAILABLE") { res.status(400).json({ message: err.message }); return; }
+        if (err.message === "TEMPLATE_NOT_FOUND")     { res.status(400).json({ message: err.message }); return; }
       }
       throw err;
     }
@@ -159,7 +166,6 @@ export class IgController {
         quantity,
         topic: typeof body.topic === "string" ? body.topic : undefined,
         campaignContext: typeof body.campaignContext === "string" ? body.campaignContext : undefined,
-        styleReferenceIds: Array.isArray(body.styleReferenceIds) ? body.styleReferenceIds.filter((id): id is string => typeof id === "string") : [],
         contentAssetIds: Array.isArray(body.contentAssetIds) ? body.contentAssetIds.filter((id): id is string => typeof id === "string") : [],
       }));
     } catch (err) { if (err instanceof Error && err.message === "BRAND_NOT_FOUND") { res.status(404).json({ message: err.message }); return; } throw err; }
@@ -243,6 +249,52 @@ export class IgController {
     }
     const result = await this.checkTemplateSummaryBatch.execute(openAiBatchId, brandId);
     res.json(result);
+  };
+
+  handleCheckTemplateSummaries = async (req: Request, res: Response): Promise<void> => {
+    await this.checkTemplateSummaryBatches.executeForBrand(req.params.brandId);
+    res.json(await this.listIgTemplates.execute(req.params.brandId));
+  };
+
+  // ── AI Template Generation ────────────────────────────
+
+  handleGenerateTemplates = async (req: Request, res: Response): Promise<void> => {
+    const { quantity, styleDirection, mode, baseTemplateId } = req.body as Record<string, unknown>;
+    try {
+      const job = await this.generateIgTemplates.execute({
+        brandId:        req.params.brandId,
+        quantity:       typeof quantity === "number" ? quantity : parseInt(String(quantity || "1"), 10),
+        styleDirection: typeof styleDirection === "string" ? styleDirection : undefined,
+        mode:           mode === "iterate" ? "iterate" : "create",
+        baseTemplateId: typeof baseTemplateId === "string" ? baseTemplateId : undefined,
+      });
+      res.status(201).json(job);
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.message === "BRAND_NOT_FOUND")        { res.status(404).json({ message: err.message }); return; }
+        if (err.message === "INVALID_QUANTITY")       { res.status(400).json({ message: err.message }); return; }
+        if (err.message === "MISSING_BASE_TEMPLATE")  { res.status(400).json({ message: err.message }); return; }
+        if (err.message === "TEMPLATE_NOT_FOUND")     { res.status(400).json({ message: err.message }); return; }
+      }
+      throw err;
+    }
+  };
+
+  handleListTemplateJobs = async (req: Request, res: Response): Promise<void> => {
+    const jobs = await this.listIgTemplateGenerationJobs.execute(req.params.brandId);
+    res.json(jobs);
+  };
+
+  handleCheckTemplateJob = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await this.checkTemplateGenerationJob.execute(req.params.id);
+      res.json(result);
+    } catch (err) {
+      if (err instanceof Error && err.message === "BATCH_JOB_NOT_FOUND") {
+        res.status(404).json({ message: err.message }); return;
+      }
+      throw err;
+    }
   };
 
   // ── Cost Logs ─────────────────────────────────────────

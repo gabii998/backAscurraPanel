@@ -3,12 +3,12 @@ import { env } from "../../config/env";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
 
 export class EstimateIgGenerationCost {
-  async execute(brandId: string, input: { quantity: number; topic?: string; campaignContext?: string; styleReferenceIds?: string[]; contentAssetIds?: string[] }) {
+  async execute(brandId: string, input: { quantity: number; topic?: string; campaignContext?: string; contentAssetIds?: string[] }) {
     const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { openAiModel: true, companyContext: true, acknowledge: true, voice: true } });
     if (!brand) throw new Error("BRAND_NOT_FOUND");
     const model = brand.openAiModel || env.openAiModel;
     const [styles, assets, history] = await Promise.all([
-      prisma.igExamplePost.findMany({ where: { brandId, id: { in: input.styleReferenceIds ?? [] }, assetType: "style_reference", summaryStatus: "done" }, select: { styleSummary: true } }),
+      prisma.igExamplePost.findMany({ where: { brandId, assetType: "style_reference", summaryStatus: "done" }, orderBy: { createdAt: "desc" }, take: 8, select: { styleSummary: true } }),
       prisma.igExamplePost.findMany({ where: { brandId, id: { in: input.contentAssetIds ?? [] } }, select: { title: true, description: true } }),
       prisma.igBatchJob.findMany({ where: { brandId, status: "completed", outputTokens: { gt: 0 } }, orderBy: { createdAt: "desc" }, take: 20, select: { outputTokens: true, postCount: true } }),
     ]);

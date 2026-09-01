@@ -269,7 +269,7 @@ describe("OpenAIService", () => {
           output_file_id: null,
           error_file_id: null,
           input_file_id: "file-abc123",
-          metadata: { retryCount: "2" },
+          metadata: { retryCount: "100" },
           errors: cannotFindFileErrors,
         });
 
@@ -328,6 +328,32 @@ describe("OpenAIService", () => {
         error: undefined,
         usage: { promptTokens: 22, completionTokens: 2, totalTokens: 24 },
       });
+    });
+
+    it("collapses a model's over-escaped \\n back to a single escape so downstream JSON.parse decodes a real newline", async () => {
+      // Reproduces a real production bug: the model sometimes double-escapes newlines inside
+      // the JSON string it returns (writing \\n instead of \n) — valid JSON, but it decodes to
+      // a literal backslash+n instead of an actual newline, corrupting captions and templateHtml.
+      const outputLine = JSON.stringify({
+        id: "batch_req_123",
+        custom_id: "post-0",
+        response: {
+          status_code: 200,
+          request_id: "req_123",
+          body: {
+            id: "chatcmpl-123",
+            choices: [{ index: 0, message: { role: "assistant", content: '{"caption":"Line one.\\\\nLine two."}' }, finish_reason: "stop" }],
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          },
+        },
+        error: null,
+      });
+      filesContent.mockResolvedValue({ text: async () => outputLine });
+
+      const [result] = await service.downloadBatchResults("file-double-escaped");
+
+      const parsed = JSON.parse(result.content) as { caption: string };
+      expect(parsed.caption).toBe("Line one.\nLine two.");
     });
 
     it("parses a per-line error from the error file (e.g. the missing-'json'-keyword validation failure)", async () => {

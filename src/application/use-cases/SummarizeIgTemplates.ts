@@ -22,12 +22,12 @@ export class SummarizeIgTemplates {
       userPrompt: `HTML del template:\n${t.html}`,
     }));
 
-    const openAI = await resolveOpenAIService(resolvedBrandId);
+    const { service: openAI, keySnapshot } = await resolveOpenAIService(resolvedBrandId);
     const batchId = await openAI.submitBatch(requests);
 
     await Promise.all(
       toProcess.map(t =>
-        this.templateRepo.update(t.id, { summaryStatus: "processing" }),
+        this.templateRepo.update(t.id, { summaryStatus: "processing", summaryBatchId: batchId, openAiKeySnapshot: keySnapshot }),
       ),
     );
 

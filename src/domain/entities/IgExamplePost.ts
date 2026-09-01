@@ -15,6 +15,7 @@ export interface IgExamplePost {
   styleSummary: string;
   summaryStatus: string;
   summaryBatchId: string | null;
+  openAiKeySnapshot: string | null;
   summaryError: string;
   createdAt: Date;
   updatedAt: Date;

@@ -1,17 +1,17 @@
 import { prisma } from "../../infrastructure/db/prisma";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
-import { env } from "../../config/env";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 export class CheckSynthesisBatch {
   async execute(brandId: string, openAiBatchId: string): Promise<{ done: boolean; insights?: string }> {
-    const openAI = await resolveOpenAIService(brandId);
+    const learning = await prisma.brandLearning.findUnique({ where: { brandId }, select: { openAiKeySnapshot: true } });
+    const { service: openAI, keySnapshot, model } = await resolveOpenAIService(brandId, learning?.openAiKeySnapshot);
     const { status, outputFileId, errorFileId, errorDetail, retriedBatchId } = await openAI.getBatchStatus(openAiBatchId);
 
     if (retriedBatchId) {
       await prisma.brandLearning.updateMany({
         where: { brandId, openAiBatchId },
-        data: { openAiBatchId: retriedBatchId },
+        data: { openAiBatchId: retriedBatchId, openAiKeySnapshot: keySnapshot },
       });
       return { done: false };
     }
@@ -54,13 +54,13 @@ export class CheckSynthesisBatch {
 
     if (result.usage) {
       const { promptTokens, completionTokens } = result.usage;
-      const estimatedCostUsd = calculateBatchCost(env.openAiModel, promptTokens, completionTokens);
+      const estimatedCostUsd = calculateBatchCost(model, promptTokens, completionTokens);
       await prisma.igCostLog.create({
         data: {
           brandId,
           operation: "brand_synthesis",
           entityId: openAiBatchId,
-          model: env.openAiModel,
+          model,
           inputTokens: promptTokens,
           outputTokens: completionTokens,
           totalTokens: promptTokens + completionTokens,

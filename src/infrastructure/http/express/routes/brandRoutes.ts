@@ -18,6 +18,7 @@ export const buildBrandRoutes = (
 
   router.get("/brands/:id/examples",        authMiddleware, wrapRequestHandler(controller.handleListExamples.bind(controller)));
   router.post("/brands/:id/examples",       authMiddleware, upload.single("image"), wrapRequestHandler(controller.handleCreateExample.bind(controller)));
+  router.post("/brands/:id/examples/check-summaries", authMiddleware, wrapRequestHandler(controller.handleCheckExampleSummaries.bind(controller)));
   router.post("/brands/:id/examples/:exId/retry-summary", authMiddleware, wrapRequestHandler(controller.handleRetryExampleSummary.bind(controller)));
   router.delete("/brands/:id/examples/:exId", authMiddleware, wrapRequestHandler(controller.handleDeleteExample.bind(controller)));
 

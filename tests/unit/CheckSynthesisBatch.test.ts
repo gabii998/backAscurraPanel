@@ -1,6 +1,6 @@
 jest.mock("../../src/infrastructure/db/prisma", () => ({
   prisma: {
-    brandLearning: { updateMany: jest.fn() },
+    brandLearning: { updateMany: jest.fn(), findUnique: jest.fn().mockResolvedValue({ openAiKeySnapshot: null }) },
     igCostLog:     { create: jest.fn() },
   },
 }));
@@ -26,7 +26,7 @@ describe("CheckSynthesisBatch", () => {
         error: "'messages' must contain the word 'json' in some form, to use 'response_format' of type 'json_object'.",
       }]),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
     (prisma.brandLearning.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
 
     const result = await new CheckSynthesisBatch().execute("brand-1", "batch-1");
@@ -44,7 +44,7 @@ describe("CheckSynthesisBatch", () => {
       getBatchStatus: jest.fn().mockResolvedValue({ status: "in_progress", outputFileId: undefined, errorFileId: undefined }),
       downloadBatchResults: jest.fn(),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
 
     const result = await new CheckSynthesisBatch().execute("brand-1", "batch-1");
 
@@ -62,7 +62,7 @@ describe("CheckSynthesisBatch", () => {
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
       }]),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
     (prisma.brandLearning.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
     (prisma.igCostLog.create as jest.Mock).mockResolvedValue({});
 
@@ -84,7 +84,7 @@ describe("CheckSynthesisBatch", () => {
       getBatchStatus: jest.fn().mockResolvedValue({ status: "expired", outputFileId: undefined, errorFileId: undefined }),
       downloadBatchResults: jest.fn(),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
     (prisma.brandLearning.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
 
     const result = await new CheckSynthesisBatch().execute("brand-1", "batch-1");
@@ -101,7 +101,7 @@ describe("CheckSynthesisBatch", () => {
       getBatchStatus: jest.fn().mockResolvedValue({ status: "validating", outputFileId: undefined, errorFileId: undefined, retriedBatchId: "batch-retry-1" }),
       downloadBatchResults: jest.fn(),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
     (prisma.brandLearning.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
 
     const result = await new CheckSynthesisBatch().execute("brand-1", "batch-1");
@@ -109,7 +109,7 @@ describe("CheckSynthesisBatch", () => {
     expect(result).toEqual({ done: false });
     expect(prisma.brandLearning.updateMany).toHaveBeenCalledWith({
       where: { brandId: "brand-1", openAiBatchId: "batch-1" },
-      data: { openAiBatchId: "batch-retry-1" },
+      data: { openAiBatchId: "batch-retry-1", openAiKeySnapshot: "enc-key" },
     });
   });
 
@@ -123,7 +123,7 @@ describe("CheckSynthesisBatch", () => {
       }),
       downloadBatchResults: jest.fn(),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue(openAI);
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
     (prisma.brandLearning.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
 
     const result = await new CheckSynthesisBatch().execute("brand-1", "batch-1");

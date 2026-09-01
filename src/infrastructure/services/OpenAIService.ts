@@ -1,6 +1,15 @@
 import OpenAI from "openai";
 import type { OpenAIBatchService, BatchRequest, BatchResult } from "../../application/services/OpenAIBatchService";
 
+// Models occasionally double-escape whitespace inside JSON string values they generate
+// (writing \\n instead of \n), which is valid JSON but decodes to a literal backslash+n
+// instead of a real newline (observed in production: broke templateHtml and captions).
+// Collapse the double escape back to a single one before any caller JSON.parses this text,
+// so it decodes to the real character the model actually intended.
+function normalizeOverEscapedJson(text: string): string {
+  return text.replace(/\\\\([nrt])/g, "\\$1");
+}
+
 export class OpenAIService implements OpenAIBatchService {
   private client: OpenAI;
 
@@ -36,7 +45,9 @@ export class OpenAIService implements OpenAIBatchService {
               { type: "image_url", image_url: { url: r.imageUrl, detail: "low" } },
             ] : r.userPrompt },
           ],
-          temperature: 0.8,
+          // No fixed temperature: reasoning-family models (e.g. gpt-5.6-luna, o-series)
+          // reject any value other than their default (1) with a per-line batch error,
+          // and omitting the param is safe/compatible across every model.
           ...(r.responseFormat === "json" ? { response_format: { type: "json_object" } } : {}),
         },
       }),
@@ -86,18 +97,21 @@ export class OpenAIService implements OpenAIBatchService {
 
     // OpenAI's Batch API can fail validation right after accepting the batch with
     // "Cannot find file ..., or organization ... does not have access to it" even though
-    // the file was uploaded successfully moments earlier (observed in production). This
-    // looks like a platform-side file-visibility propagation delay rather than a permanent
-    // access problem, so recreate the batch against the same already-uploaded file instead
-    // of surfacing a hard failure to the caller. Capped via batch metadata (not a DB column)
-    // so a genuinely permanent failure still surfaces after a couple of attempts instead of
-    // looping forever across polling cycles. Callers that cannot persist the resulting
-    // retriedBatchId anywhere (so a re-poll would always hit this same dead batch and retry
-    // again unbounded, since batch metadata cannot be updated after creation) must opt out
-    // with autoRetryOnFileError: false.
+    // the file was uploaded successfully moments earlier (observed in production, and
+    // confirmed as a known, still-unresolved OpenAI platform-side outage as of 2026-09
+    // https://community.openai.com/t/openai-batch-api-failing-since-19th-august/1393174 —
+    // affected users report it can take hours to clear, with no deterministic signal for
+    // when a file becomes usable). So recreate the batch against the same already-uploaded
+    // file instead of surfacing a hard failure to the caller. Capped via batch metadata (not
+    // a DB column) generously (~8h at the 5-minute polling cadence) so the poller keeps
+    // quietly retrying through the outage instead of giving up in minutes, while a genuinely
+    // permanent failure still surfaces eventually instead of looping forever. Callers that
+    // cannot persist the resulting retriedBatchId anywhere (so a re-poll would always hit
+    // this same dead batch and retry again unbounded, since batch metadata cannot be updated
+    // after creation) must opt out with autoRetryOnFileError: false.
     const autoRetryOnFileError = options?.autoRetryOnFileError ?? true;
     const retryCount = Number(batch.metadata?.retryCount ?? 0);
-    if (autoRetryOnFileError && batch.status === "failed" && errorDetail && /cannot find file/i.test(errorDetail) && batch.input_file_id && retryCount < 2) {
+    if (autoRetryOnFileError && batch.status === "failed" && errorDetail && /cannot find file/i.test(errorDetail) && batch.input_file_id && retryCount < 100) {
       try {
         const retried = await this.client.batches.create({
           input_file_id:      batch.input_file_id,
@@ -137,17 +151,20 @@ export class OpenAIService implements OpenAIBatchService {
             body?: {
               choices?: Array<{ message?: { content?: string } }>;
               usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+              error?: { message: string };
             };
           };
           error?: { message: string };
         };
 
-        const content = parsed.response?.body?.choices?.[0]?.message?.content ?? "";
+        const content = normalizeOverEscapedJson(parsed.response?.body?.choices?.[0]?.message?.content ?? "");
         const rawUsage = parsed.response?.body?.usage;
         results.push({
           customId: parsed.custom_id,
           content,
-          error: parsed.error?.message,
+          // A per-line HTTP-level rejection (e.g. an unsupported request param) lands
+          // its message inside response.body.error, not the top-level error field.
+          error: parsed.error?.message ?? parsed.response?.body?.error?.message,
           usage: rawUsage
             ? {
                 promptTokens:     rawUsage.prompt_tokens,

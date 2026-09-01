@@ -8,6 +8,9 @@ export class R2Storage {
     if (!env.r2AccountId || !env.r2AccessKeyId || !env.r2SecretAccessKey || !env.r2BucketName || !env.r2PublicBaseUrl) {
       throw new Error("R2_NOT_CONFIGURED");
     }
+    if (!/^https?:\/\//.test(env.r2PublicBaseUrl)) {
+      throw new Error("CLOUDFLARE_R2_PUBLIC_BASE_URL must include a scheme (http:// or https://)");
+    }
     this.client = new S3Client({
       region: "auto",
       endpoint: `https://${env.r2AccountId}.r2.cloudflarestorage.com`,

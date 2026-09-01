@@ -9,6 +9,7 @@ import type { CreateIgExamplePost } from "../../../application/use-cases/CreateI
 import type { DeleteIgExamplePost } from "../../../application/use-cases/DeleteIgExamplePost";
 import type { ListIgExamplePosts } from "../../../application/use-cases/ListIgExamplePosts";
 import type { RetryIgExampleSummary } from "../../../application/use-cases/RetryIgExampleSummary";
+import type { CheckIgExampleSummaryBatches } from "../../../application/use-cases/CheckIgExampleSummaryBatches";
 
 export class BrandController {
   constructor(
@@ -21,6 +22,7 @@ export class BrandController {
     private deleteIgExamplePost: DeleteIgExamplePost,
     private listIgExamplePosts:  ListIgExamplePosts,
     private retryIgExampleSummary: RetryIgExampleSummary,
+    private checkIgExampleSummaries: CheckIgExampleSummaryBatches,
   ) {}
 
   handleList = async (_req: Request, res: Response): Promise<void> => {
@@ -143,6 +145,11 @@ export class BrandController {
       }
       throw err;
     }
+  };
+
+  handleCheckExampleSummaries = async (req: Request, res: Response): Promise<void> => {
+    await this.checkIgExampleSummaries.executeForBrand(req.params.id);
+    res.json(await this.listIgExamplePosts.execute(req.params.id));
   };
 
   handleDeleteExample = async (req: Request, res: Response): Promise<void> => {

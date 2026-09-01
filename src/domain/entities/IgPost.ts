@@ -22,6 +22,9 @@ export interface IgPost {
   igEngagement: number;
   igSaved: number;
   igSyncedAt: Date | null;
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
   createdAt: Date;
   updatedAt: Date;
 }

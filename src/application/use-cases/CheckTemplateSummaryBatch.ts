@@ -1,21 +1,29 @@
+import { prisma } from "../../infrastructure/db/prisma";
 import type { IgTemplateRepository } from "../../domain/repositories/IgTemplateRepository";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
-import { prisma } from "../../infrastructure/db/prisma";
-import { env } from "../../config/env";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 
 export class CheckTemplateSummaryBatch {
   constructor(private templateRepo: IgTemplateRepository) {}
 
   async execute(openAiBatchId: string, brandId: string): Promise<{ updatedCount: number }> {
-    const openAI = await resolveOpenAIService(brandId);
-    // autoRetryOnFileError: false — IgTemplate has no column to persist a retried batch id,
-    // and the frontend always re-polls with the original id, so an unbounded auto-retry
-    // inside getBatchStatus would recreate a fresh OpenAI batch on every single poll here.
-    const { status, outputFileId, errorFileId, errorDetail } = await openAI.getBatchStatus(openAiBatchId, { autoRetryOnFileError: false });
+    const { service: openAI, keySnapshot, model } = await resolveOpenAIService(brandId);
+    const { status, outputFileId, errorFileId, errorDetail, retriedBatchId } = await openAI.getBatchStatus(openAiBatchId);
+
+    if (retriedBatchId) {
+      await prisma.igTemplate.updateMany({
+        where: { summaryBatchId: openAiBatchId },
+        data: { summaryBatchId: retriedBatchId, openAiKeySnapshot: keySnapshot },
+      });
+      return { updatedCount: 0 };
+    }
 
     if (status === "failed" || status === "expired" || status === "cancelled") {
       console.error(`[CheckTemplateSummaryBatch] batch=${openAiBatchId} status=${status} detail=${errorDetail ?? "n/a"}`);
+      await prisma.igTemplate.updateMany({
+        where: { summaryBatchId: openAiBatchId },
+        data: { summaryStatus: "failed", summaryError: errorDetail ?? `OpenAI batch status: ${status}` },
+      });
       return { updatedCount: 0 };
     }
 
@@ -48,14 +56,14 @@ export class CheckTemplateSummaryBatch {
       updatedCount++;
     }
 
-    const estimatedCostUsd = calculateBatchCost(env.openAiModel, totalInput, totalOutput);
+    const estimatedCostUsd = calculateBatchCost(model, totalInput, totalOutput);
 
     await prisma.igCostLog.create({
       data: {
         brandId:          brandId ?? null,
         operation:        "template_summary",
         entityId:         openAiBatchId,
-        model:            env.openAiModel,
+        model,
         inputTokens:      totalInput,
         outputTokens:     totalOutput,
         totalTokens:      totalInput + totalOutput,

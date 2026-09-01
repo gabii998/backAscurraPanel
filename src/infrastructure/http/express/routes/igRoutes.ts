@@ -20,6 +20,12 @@ export const buildIgRoutes = (
   // Template summarization
   router.post("/ig-templates/summarize",              authMiddleware, wrapRequestHandler(controller.handleSummarize.bind(controller)));
   router.post("/ig-templates/check-summary-batch",    authMiddleware, wrapRequestHandler(controller.handleCheckSummaryBatch.bind(controller)));
+  router.post("/brands/:brandId/ig-templates/check-summaries", authMiddleware, wrapRequestHandler(controller.handleCheckTemplateSummaries.bind(controller)));
+
+  // AI template generation
+  router.post("/brands/:brandId/ig-templates/generate", authMiddleware, wrapRequestHandler(controller.handleGenerateTemplates.bind(controller)));
+  router.get("/brands/:brandId/ig-template-jobs",       authMiddleware, wrapRequestHandler(controller.handleListTemplateJobs.bind(controller)));
+  router.post("/ig-template-jobs/:id/check",            authMiddleware, wrapRequestHandler(controller.handleCheckTemplateJob.bind(controller)));
 
   // Posts
   router.get("/brands/:brandId/ig-posts",          authMiddleware, wrapRequestHandler(controller.handleListPosts.bind(controller)));

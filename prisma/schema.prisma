@@ -489,6 +489,7 @@ model Brand {
   templates     IgTemplate[]
   posts         IgPost[]
   batchJobs     IgBatchJob[]
+  templateGenerationJobs IgTemplateGenerationJob[]
   learning      BrandLearning?
 }
 
@@ -510,25 +511,51 @@ model IgExamplePost {
   styleSummary   String   @default("")
   summaryStatus  String   @default("pending")
   summaryBatchId String?
+  openAiKeySnapshot String?
   summaryError   String   @default("")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
 
 model IgTemplate {
-  id            String     @id @default(uuid())
-  brandId       String
-  brand         Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  name          String
-  html          String
-  variables     String[]
-  summary       String     @default("")
-  summaryStatus String     @default("pending")
-  summaryError  String     @default("")
-  isAiGenerated Boolean    @default(false)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  posts         IgPost[]
+  id                String     @id @default(uuid())
+  brandId           String
+  brand             Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name              String
+  html              String
+  variables         String[]
+  summary           String     @default("")
+  summaryStatus     String     @default("pending")
+  summaryError      String     @default("")
+  summaryBatchId    String?
+  openAiKeySnapshot String?
+  isAiGenerated     Boolean    @default(false)
+  generationStatus  String     @default("done")
+  generationError   String     @default("")
+  generationJobId   String?
+  generationJob     IgTemplateGenerationJob? @relation(fields: [generationJobId], references: [id])
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  posts             IgPost[]
+}
+
+model IgTemplateGenerationJob {
+  id                String     @id @default(uuid())
+  brandId           String
+  brand             Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  openAiBatchId     String?
+  openAiKeySnapshot String?
+  prompt            String
+  styleDirection    String     @default("")
+  status            String     @default("pending")
+  templateCount     Int        @default(0)
+  errorMessage      String     @default("")
+  inputTokens       Int        @default(0)
+  outputTokens      Int        @default(0)
+  estimatedCostUsd  Float      @default(0)
+  templates         IgTemplate[]
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 }
 
 model IgPost {
@@ -556,6 +583,9 @@ model IgPost {
   igEngagement      Int          @default(0)
   igSaved           Int          @default(0)
   igSyncedAt        DateTime?
+  inputTokens       Int          @default(0)
+  outputTokens      Int          @default(0)
+  estimatedCostUsd  Float        @default(0)
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 }
@@ -572,6 +602,7 @@ model IgBatchJob {
   brandId          String
   brand            Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
   openAiBatchId    String?
+  openAiKeySnapshot String?
   prompt           String
   status           String     @default("pending")
   postCount        Int        @default(0)
@@ -610,6 +641,7 @@ model BrandLearning {
   insightStatus String    @default("pending")
   insightError  String    @default("")
   openAiBatchId String?
+  openAiKeySnapshot String?
   totalApproved Int       @default(0)
   totalRejected Int       @default(0)
   lastSynthAt   DateTime?

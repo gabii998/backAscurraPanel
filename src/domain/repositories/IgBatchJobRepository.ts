@@ -3,6 +3,7 @@ import type { IgBatchJob } from "../entities/IgBatchJob";
 export interface IgBatchJobCreateData {
   brandId: string;
   openAiBatchId?: string | null;
+  openAiKeySnapshot?: string | null;
   prompt: string;
   status?: string;
   postCount?: number;
@@ -12,6 +13,7 @@ export interface IgBatchJobCreateData {
 
 export interface IgBatchJobUpdateData {
   openAiBatchId?: string | null;
+  openAiKeySnapshot?: string | null;
   status?: string;
   errorMessage?: string;
   inputTokens?: number;

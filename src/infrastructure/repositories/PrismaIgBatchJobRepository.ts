@@ -7,6 +7,7 @@ function mapJob(raw: Record<string, unknown>): IgBatchJob {
     id:               raw.id               as string,
     brandId:          raw.brandId          as string,
     openAiBatchId:    raw.openAiBatchId    as string | null,
+    openAiKeySnapshot: (raw.openAiKeySnapshot as string | null) ?? null,
     prompt:           raw.prompt           as string,
     status:           raw.status           as string,
     postCount:        raw.postCount        as number,
@@ -27,6 +28,7 @@ export class PrismaIgBatchJobRepository implements IgBatchJobRepository {
       data: {
         brandId:       data.brandId,
         openAiBatchId: data.openAiBatchId ?? null,
+        openAiKeySnapshot: data.openAiKeySnapshot ?? null,
         prompt:        data.prompt,
         status:        data.status        ?? "pending",
         postCount:     data.postCount     ?? 0,
@@ -63,6 +65,7 @@ export class PrismaIgBatchJobRepository implements IgBatchJobRepository {
       where: { id },
       data: {
         ...(data.openAiBatchId    !== undefined && { openAiBatchId: data.openAiBatchId }),
+        ...(data.openAiKeySnapshot !== undefined && { openAiKeySnapshot: data.openAiKeySnapshot }),
         ...(data.status           !== undefined && { status: data.status }),
         ...(data.errorMessage     !== undefined && { errorMessage: data.errorMessage }),
         ...(data.inputTokens      !== undefined && { inputTokens: data.inputTokens }),

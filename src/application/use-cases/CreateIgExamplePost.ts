@@ -48,15 +48,16 @@ export class CreateIgExamplePost {
     } });
     if (input.assetType !== "style_reference") return uploaded;
     try {
-      const batchId = await (await resolveOpenAIService(input.brandId)).submitBatch([{
+      const { service, keySnapshot } = await resolveOpenAIService(input.brandId);
+      const batchId = await service.submitBatch([{
         customId: `example-summary-${example.id}`,
-        systemPrompt: "Analizá esta referencia de Instagram. Respondé SOLO JSON válido con summary. Describí ÚNICAMENTE patrones abstractos: composición, paleta, jerarquía, tono, longitud, emojis, puntuación y estructura. No transcribas ni menciones texto visible, temas, marcas, productos, ofertas, hashtags, frases ni CTAs.",
+        systemPrompt: "Analizá esta referencia de Instagram. Respondé SOLO JSON válido con summary. Describí ÚNICAMENTE patrones abstractos: composición, paleta, jerarquía, tono, longitud, emojis, puntuación y estructura. No transcribas ni menciones texto visible, temas, marcas, productos, ofertas, hashtags, frases ni CTAs. No describas elementos visuales concretos que puedan interpretarse como contenido a replicar (capturas de pantalla, paneles de interfaz, gráficos de datos específicos, fotos de productos): referite a ellos solo en términos de composición abstracta (ej. 'bloque de imagen', nunca qué muestra).",
         userPrompt: "Generá una ficha abstracta de estilo, sin conservar contenido de la publicación.",
         imageUrl,
         responseFormat: "json",
       }]);
       return prisma.igExamplePost.update({ where: { id: example.id }, data: {
-        summaryBatchId: batchId, summaryStatus: "processing",
+        summaryBatchId: batchId, openAiKeySnapshot: keySnapshot, summaryStatus: "processing",
       } });
     } catch (error) {
       return prisma.igExamplePost.update({ where: { id: example.id }, data: { summaryStatus: "failed", summaryError: "STYLE_ANALYSIS_UNAVAILABLE" } });
