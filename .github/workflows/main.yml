@@ -84,5 +84,13 @@ jobs:
           COOLIFY_WEBHOOK_URL: ${{ vars.WEBHOOK_URL }}
           COOLIFY_WEBHOOK_SECRET: ${{ vars.WEBHOOK_SECRET }}
         run: |
-          curl --fail --silent --show-error -X POST "$COOLIFY_WEBHOOK_URL" \
-            -H "Authorization: Bearer $COOLIFY_WEBHOOK_SECRET"
+          http_status=$(curl --silent --show-error -o /tmp/webhook_response.txt -w "%{http_code}" \
+            -X POST "$COOLIFY_WEBHOOK_URL" \
+            -H "Authorization: Bearer $COOLIFY_WEBHOOK_SECRET")
+          echo "Coolify respondió con HTTP $http_status:"
+          cat /tmp/webhook_response.txt
+          echo
+          if [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            echo "El webhook no devolvió un status 2xx — marcando el job como fallido."
+            exit 1
+          fi
