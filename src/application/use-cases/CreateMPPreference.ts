@@ -47,7 +47,7 @@ export class CreateMPPreference {
     if (!config) throw new Error("CONFIG_NOT_FOUND");
 
     const client = new MercadoPagoClient(config.accessToken);
-    const notificationUrl = `${env.apiUrl}/mp/webhook/${config.name}`;
+    const notificationUrl = `${env.apiUrl}/mp/webhook/${encodeURIComponent(config.name)}`;
     const preferenceRequest = {
       items,
       external_reference: input.externalReference ?? "",
