@@ -11,13 +11,16 @@ jest.mock("../../src/infrastructure/db/prisma", () => ({
 
 import { CheckBatchStatus } from "../../src/application/use-cases/CheckBatchStatus";
 import { resolveOpenAIService } from "../../src/infrastructure/services/resolveOpenAIService";
+import { prisma } from "../../src/infrastructure/db/prisma";
 import type { IgBatchJob } from "../../src/domain/entities/IgBatchJob";
+import type { IgPost } from "../../src/domain/entities/IgPost";
 
 function baseJob(overrides: Partial<IgBatchJob> = {}): IgBatchJob {
   return {
     id: "job-1",
     brandId: "brand-1",
     openAiBatchId: "batch-1",
+    imageOpenAiBatchId: null,
     openAiKeySnapshot: null,
     prompt: "",
     status: "processing",
@@ -34,23 +37,37 @@ function baseJob(overrides: Partial<IgBatchJob> = {}): IgBatchJob {
   };
 }
 
-describe("CheckBatchStatus", () => {
-  it("stores OpenAI's real validation error in errorMessage when getBatchStatus provides one", async () => {
+function basePost(overrides: Partial<IgPost> = {}): IgPost {
+  return {
+    id: "post-1", brandId: "brand-1", batchJobId: "job-1", caption: "", hashtags: [], imagePrompt: "",
+    status: "generating", approvedById: null, approvedAt: null, rejectedAt: null, rejectReason: "",
+    imageUrl: null, instagramMediaId: null, publishStatus: "unpublished", publishedAt: null,
+    igImpressions: 0, igReach: 0, igEngagement: 0, igSaved: 0, igSyncedAt: null,
+    inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, createdAt: new Date(), updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
+describe("CheckBatchStatus — text phase (job.status 'processing')", () => {
+  beforeEach(() => {
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.igCostLog.create as jest.Mock).mockClear();
+  });
+
+  it("stores OpenAI's real validation error in errorMessage when the text batch fails", async () => {
     const job = baseJob();
     const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "failed" }) };
     const postRepo = { findByBatchJobId: jest.fn() };
-    const templateRepo = {};
+    const storage = { put: jest.fn() };
     const openAI = {
       getBatchStatus: jest.fn().mockResolvedValue({
         status: "failed",
-        outputFileId: undefined,
-        errorFileId: undefined,
         errorDetail: "invalid_request: Cannot find file file-abc123, or organization org-xyz does not have access to it.",
       }),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
 
-    await new CheckBatchStatus(jobRepo as any, postRepo as any, templateRepo as any).execute("job-1");
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
 
     expect(jobRepo.update).toHaveBeenCalledWith("job-1", {
       status: "failed",
@@ -60,130 +77,144 @@ describe("CheckBatchStatus", () => {
 
   it("switches to the retried batch id and keeps status processing when getBatchStatus recreates the batch", async () => {
     const job = baseJob();
-    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, openAiBatchId: "batch-retry-1", status: "processing" }) };
+    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, openAiBatchId: "batch-retry-1" }) };
     const postRepo = { findByBatchJobId: jest.fn() };
-    const templateRepo = {};
-    const openAI = {
-      getBatchStatus: jest.fn().mockResolvedValue({ status: "validating", outputFileId: undefined, errorFileId: undefined, retriedBatchId: "batch-retry-1" }),
-    };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
+    const storage = { put: jest.fn() };
+    const openAI = { getBatchStatus: jest.fn().mockResolvedValue({ status: "validating", retriedBatchId: "batch-retry-1" }) };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
 
-    await new CheckBatchStatus(jobRepo as any, postRepo as any, templateRepo as any).execute("job-1");
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
 
     expect(jobRepo.update).toHaveBeenCalledWith("job-1", { openAiBatchId: "batch-retry-1", openAiKeySnapshot: "enc-key", status: "processing" });
   });
 
-  it("falls back to a generic message when getBatchStatus provides no errorDetail", async () => {
+  it("marks the job completed directly when no post produced a usable imagePrompt", async () => {
     const job = baseJob();
-    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "failed" }) };
-    const postRepo = { findByBatchJobId: jest.fn() };
-    const templateRepo = {};
-    const openAI = {
-      getBatchStatus: jest.fn().mockResolvedValue({ status: "expired", outputFileId: undefined, errorFileId: undefined }),
-    };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
-
-    await new CheckBatchStatus(jobRepo as any, postRepo as any, templateRepo as any).execute("job-1");
-
-    expect(jobRepo.update).toHaveBeenCalledWith("job-1", {
-      status: "failed",
-      errorMessage: "OpenAI batch status: expired",
-    });
-  });
-
-  it("persists each post's own token usage and cost, not just the job-level total", async () => {
-    const job = baseJob();
-    const post = {
-      id: "post-1", brandId: "brand-1", templateId: "tpl-1", caption: "", hashtags: [], variables: {},
-      status: "generating", approvedById: null, approvedAt: null, rejectedAt: null, rejectReason: "",
-      imageUrl: null, instagramMediaId: null, publishStatus: "unpublished", publishedAt: null,
-      igImpressions: 0, igReach: 0, igEngagement: 0, igSaved: 0, igSyncedAt: null,
-      inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, createdAt: new Date(), updatedAt: new Date(),
-    };
+    const post = basePost();
     const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "completed" }) };
     const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([post]), update: jest.fn().mockResolvedValue(post) };
-    const templateRepo = {};
+    const storage = { put: jest.fn() };
     const openAI = {
-      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out", errorFileId: undefined }),
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out" }),
       downloadBatchResults: jest.fn().mockResolvedValue([{
         customId: "post-0",
-        content: JSON.stringify({ caption: "Hola", hashtags: ["#a"], templateId: "tpl-1", templateHtml: null, templateName: null, variables: {} }),
-        error: undefined,
-        usage: { promptTokens: 300, completionTokens: 100, totalTokens: 400 },
-      }]),
-    };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
-
-    await new CheckBatchStatus(jobRepo as any, postRepo as any, templateRepo as any).execute("job-1");
-
-    expect(postRepo.update).toHaveBeenCalledWith("post-1", expect.objectContaining({
-      inputTokens: 300,
-      outputTokens: 100,
-      estimatedCostUsd: expect.any(Number),
-    }));
-    const [, updateData] = (postRepo.update as jest.Mock).mock.calls[0];
-    expect(updateData.estimatedCostUsd).toBeGreaterThan(0);
-  });
-
-  it("logs the brand's own resolved model, not the server's global default, for both the per-post cost and the job-level cost log", async () => {
-    const job = baseJob();
-    const post = {
-      id: "post-1", brandId: "brand-1", templateId: "tpl-1", caption: "", hashtags: [], variables: {},
-      status: "generating", approvedById: null, approvedAt: null, rejectedAt: null, rejectReason: "",
-      imageUrl: null, instagramMediaId: null, publishStatus: "unpublished", publishedAt: null,
-      igImpressions: 0, igReach: 0, igEngagement: 0, igSaved: 0, igSyncedAt: null,
-      inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, createdAt: new Date(), updatedAt: new Date(),
-    };
-    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "completed" }) };
-    const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([post]), update: jest.fn().mockResolvedValue(post) };
-    const templateRepo = {};
-    const openAI = {
-      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out", errorFileId: undefined }),
-      downloadBatchResults: jest.fn().mockResolvedValue([{
-        customId: "post-0",
-        content: JSON.stringify({ caption: "Hola", hashtags: ["#a"], templateId: "tpl-1", variables: {} }),
-        error: undefined,
-        usage: { promptTokens: 300, completionTokens: 100, totalTokens: 400 },
-      }]),
-    };
-    // A brand with its own custom model configured — resolveOpenAIService resolves this
-    // per-brand model, distinct from whatever the server's global env.openAiModel is.
-    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-5.6-luna" });
-    const { prisma } = require("../../src/infrastructure/db/prisma");
-
-    await new CheckBatchStatus(jobRepo as any, postRepo as any, templateRepo as any).execute("job-1");
-
-    expect(prisma.igCostLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ model: "gpt-5.6-luna" }),
-    }));
-  });
-
-  it("never invents/creates a new template even when a result has no templateId — posts always draw from an existing template", async () => {
-    const job = baseJob();
-    const post = {
-      id: "post-1", brandId: "brand-1", templateId: null, caption: "", hashtags: [], variables: {},
-      status: "generating", approvedById: null, approvedAt: null, rejectedAt: null, rejectReason: "",
-      imageUrl: null, instagramMediaId: null, publishStatus: "unpublished", publishedAt: null,
-      igImpressions: 0, igReach: 0, igEngagement: 0, igSaved: 0, igSyncedAt: null,
-      inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, createdAt: new Date(), updatedAt: new Date(),
-    };
-    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "completed" }) };
-    const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([post]), update: jest.fn().mockResolvedValue(post) };
-    const templateRepo = { create: jest.fn() };
-    const openAI = {
-      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out", errorFileId: undefined }),
-      downloadBatchResults: jest.fn().mockResolvedValue([{
-        customId: "post-0",
-        content: JSON.stringify({ caption: "Hola", hashtags: ["#a"], templateId: null, variables: {} }),
-        error: undefined,
+        content: JSON.stringify({ caption: "Hola", hashtags: ["#a"], imagePrompt: "" }),
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
       }]),
+      submitImageBatch: jest.fn(),
     };
-    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key" });
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
 
-    await new CheckBatchStatus(jobRepo as any, postRepo as any, templateRepo as any).execute("job-1");
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
 
-    expect(templateRepo.create).not.toHaveBeenCalled();
-    expect(postRepo.update).toHaveBeenCalledWith("post-1", expect.objectContaining({ templateId: null }));
+    expect(openAI.submitImageBatch).not.toHaveBeenCalled();
+    expect(jobRepo.update).toHaveBeenCalledWith("job-1", expect.objectContaining({ status: "completed" }));
+  });
+
+  it("submits an image batch and moves the job to 'generating_images' once the text phase produces imagePrompts", async () => {
+    const job = baseJob({ brandLogoUrl: "https://cdn/logo.png", contentAssetIds: ["asset-1"] });
+    const post = basePost();
+    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "generating_images" }) };
+    const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([post]), update: jest.fn().mockResolvedValue(post) };
+    const storage = { put: jest.fn() };
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([{ imageUrl: "https://cdn/asset-1.png" }]);
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out" }),
+      downloadBatchResults: jest.fn().mockResolvedValue([{
+        customId: "post-0",
+        content: JSON.stringify({ caption: "Hola", hashtags: ["#a"], imagePrompt: "Foto de producto realista" }),
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      }]),
+      submitImageBatch: jest.fn().mockResolvedValue("image-batch-1"),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
+
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
+
+    expect(postRepo.update).toHaveBeenCalledWith("post-1", expect.objectContaining({ imagePrompt: "Foto de producto realista" }));
+    expect(openAI.submitImageBatch).toHaveBeenCalledWith(
+      [{ customId: "post-0", prompt: "Foto de producto realista" }],
+      ["https://cdn/logo.png", "https://cdn/asset-1.png"],
+    );
+    expect(jobRepo.update).toHaveBeenCalledWith("job-1", expect.objectContaining({ status: "generating_images", imageOpenAiBatchId: "image-batch-1" }));
+  });
+
+  it("rejects a post outright when its text result carries an error, without ever requesting an image for it", async () => {
+    const job = baseJob();
+    const post = basePost();
+    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "completed" }) };
+    const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([post]), update: jest.fn().mockResolvedValue(post) };
+    const storage = { put: jest.fn() };
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out" }),
+      downloadBatchResults: jest.fn().mockResolvedValue([{ customId: "post-0", content: "", error: "modelo rechazó el pedido" }]),
+      submitImageBatch: jest.fn(),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
+
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
+
+    expect(postRepo.update).toHaveBeenCalledWith("post-1", expect.objectContaining({ status: "rejected" }));
+    expect(openAI.submitImageBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("CheckBatchStatus — image phase (job.status 'generating_images')", () => {
+  beforeEach(() => {
+    (prisma.igCostLog.create as jest.Mock).mockClear();
+  });
+
+  it("uploads the decoded image, marks the post draft, and completes the job", async () => {
+    const job = baseJob({ status: "generating_images", imageOpenAiBatchId: "image-batch-1", estimatedCostUsd: 0.01 });
+    const post = basePost({ imagePrompt: "Foto de producto" });
+    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "completed" }) };
+    const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([post]), update: jest.fn().mockResolvedValue(post) };
+    const storage = { put: jest.fn().mockResolvedValue("https://r2/instagram/brand-1/posts/post-1/x.png") };
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out" }),
+      downloadImageBatchResults: jest.fn().mockResolvedValue([{ customId: "post-0", b64Json: Buffer.from("fake-png").toString("base64") }]),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
+
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
+
+    expect(storage.put).toHaveBeenCalledWith(expect.stringContaining("instagram/brand-1/posts/post-1/"), Buffer.from("fake-png"), "image/png");
+    expect(postRepo.update).toHaveBeenCalledWith("post-1", { imageUrl: "https://r2/instagram/brand-1/posts/post-1/x.png", status: "draft" });
+    expect(jobRepo.update).toHaveBeenCalledWith("job-1", expect.objectContaining({ status: "completed" }));
+  });
+
+  it("rejects a post when its image result carries an error instead of leaving it stuck generating", async () => {
+    const job = baseJob({ status: "generating_images", imageOpenAiBatchId: "image-batch-1" });
+    const post = basePost();
+    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "completed" }) };
+    const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([post]), update: jest.fn().mockResolvedValue(post) };
+    const storage = { put: jest.fn() };
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out" }),
+      downloadImageBatchResults: jest.fn().mockResolvedValue([{ customId: "post-0", error: "content_policy_violation" }]),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
+
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
+
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(postRepo.update).toHaveBeenCalledWith("post-1", expect.objectContaining({ status: "rejected" }));
+  });
+
+  it("skips posts already rejected in the text phase — never treats a missing image result for them as a new failure", async () => {
+    const job = baseJob({ status: "generating_images", imageOpenAiBatchId: "image-batch-1" });
+    const rejectedPost = basePost({ status: "rejected", rejectReason: "[error de generación] x" });
+    const jobRepo = { findById: jest.fn().mockResolvedValue(job), update: jest.fn().mockResolvedValue({ ...job, status: "completed" }) };
+    const postRepo = { findByBatchJobId: jest.fn().mockResolvedValue([rejectedPost]), update: jest.fn().mockResolvedValue(rejectedPost) };
+    const storage = { put: jest.fn() };
+    const openAI = {
+      getBatchStatus: jest.fn().mockResolvedValue({ status: "completed", outputFileId: "file-out" }),
+      downloadImageBatchResults: jest.fn().mockResolvedValue([]),
+    };
+    (resolveOpenAIService as jest.Mock).mockResolvedValue({ service: openAI, keySnapshot: "enc-key", model: "gpt-4o-mini" });
+
+    await new CheckBatchStatus(jobRepo as any, postRepo as any, storage as any).execute("job-1");
+
+    expect(postRepo.update).not.toHaveBeenCalled();
   });
 });

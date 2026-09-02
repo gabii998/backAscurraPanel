@@ -162,10 +162,8 @@ import { PrismaWhatsAppLogRepository } from "../../repositories/PrismaWhatsAppLo
 import { WhatsAppController } from "../../../interfaces/http/controllers/WhatsAppController";
 import { buildWhatsAppRoutes } from "./routes/whatsAppRoutes";
 import { PrismaBrandRepository } from "../../repositories/PrismaBrandRepository";
-import { PrismaIgTemplateRepository } from "../../repositories/PrismaIgTemplateRepository";
 import { PrismaIgPostRepository } from "../../repositories/PrismaIgPostRepository";
 import { PrismaIgBatchJobRepository } from "../../repositories/PrismaIgBatchJobRepository";
-import { PrismaIgTemplateGenerationJobRepository } from "../../repositories/PrismaIgTemplateGenerationJobRepository";
 import { CreateBrand } from "../../../application/use-cases/CreateBrand";
 import { ListBrands } from "../../../application/use-cases/ListBrands";
 import { GetBrand } from "../../../application/use-cases/GetBrand";
@@ -174,19 +172,8 @@ import { DeleteBrand } from "../../../application/use-cases/DeleteBrand";
 import { CreateIgExamplePost } from "../../../application/use-cases/CreateIgExamplePost";
 import { DeleteIgExamplePost } from "../../../application/use-cases/DeleteIgExamplePost";
 import { ListIgExamplePosts } from "../../../application/use-cases/ListIgExamplePosts";
-import { CreateIgTemplate } from "../../../application/use-cases/CreateIgTemplate";
-import { UpdateIgTemplate } from "../../../application/use-cases/UpdateIgTemplate";
-import { DeleteIgTemplate } from "../../../application/use-cases/DeleteIgTemplate";
-import { ListIgTemplates } from "../../../application/use-cases/ListIgTemplates";
 import { GenerateIgPosts } from "../../../application/use-cases/GenerateIgPosts";
 import { CheckBatchStatus } from "../../../application/use-cases/CheckBatchStatus";
-import { SummarizeIgTemplates } from "../../../application/use-cases/SummarizeIgTemplates";
-import { RetryTemplateSummary } from "../../../application/use-cases/RetryTemplateSummary";
-import { CheckTemplateSummaryBatch } from "../../../application/use-cases/CheckTemplateSummaryBatch";
-import { CheckTemplateSummaryBatches } from "../../../application/use-cases/CheckTemplateSummaryBatches";
-import { GenerateIgTemplates } from "../../../application/use-cases/GenerateIgTemplates";
-import { CheckTemplateGenerationJob } from "../../../application/use-cases/CheckTemplateGenerationJob";
-import { ListIgTemplateGenerationJobs } from "../../../application/use-cases/ListIgTemplateGenerationJobs";
 import { ListIgPosts } from "../../../application/use-cases/ListIgPosts";
 import { GetIgPost } from "../../../application/use-cases/GetIgPost";
 import { ApproveIgPost } from "../../../application/use-cases/ApproveIgPost";
@@ -198,7 +185,6 @@ import { SynthesizeBrandLearning } from "../../../application/use-cases/Synthesi
 import { CheckSynthesisBatch } from "../../../application/use-cases/CheckSynthesisBatch";
 import { CheckSynthesisBatches } from "../../../application/use-cases/CheckSynthesisBatches";
 import { ConnectIgAccount } from "../../../application/use-cases/ConnectIgAccount";
-import { UploadIgPostImage } from "../../../application/use-cases/UploadIgPostImage";
 import { EstimateIgGenerationCost } from "../../../application/use-cases/EstimateIgGenerationCost";
 import { CheckIgExampleSummaryBatches } from "../../../application/use-cases/CheckIgExampleSummaryBatches";
 import { RetryIgExampleSummary } from "../../../application/use-cases/RetryIgExampleSummary";
@@ -451,10 +437,8 @@ export const buildServer = (): Express => {
 
   // Instagram Generator use cases + controllers
   const brandRepository       = new PrismaBrandRepository();
-  const igTemplateRepository  = new PrismaIgTemplateRepository();
   const igPostRepository      = new PrismaIgPostRepository();
   const igBatchJobRepository  = new PrismaIgBatchJobRepository();
-  const igTemplateGenerationJobRepository = new PrismaIgTemplateGenerationJobRepository();
   const createBrand        = new CreateBrand(brandRepository);
   const listBrands         = new ListBrands(brandRepository);
   const getBrand           = new GetBrand(brandRepository);
@@ -466,20 +450,8 @@ export const buildServer = (): Express => {
   const listIgExamples     = new ListIgExamplePosts();
   const retryIgExampleSummary = new RetryIgExampleSummary();
 
-  const createIgTemplate   = new CreateIgTemplate(igTemplateRepository);
-  const updateIgTemplate   = new UpdateIgTemplate(igTemplateRepository);
-  const deleteIgTemplate   = new DeleteIgTemplate(igTemplateRepository);
-  const listIgTemplates    = new ListIgTemplates(igTemplateRepository);
-
-  const generateIgPosts    = new GenerateIgPosts(brandRepository, igTemplateRepository, igPostRepository, igBatchJobRepository);
-  const checkBatchStatus   = new CheckBatchStatus(igBatchJobRepository, igPostRepository, igTemplateRepository);
-  const summarizeTemplates = new SummarizeIgTemplates(igTemplateRepository);
-  const retryTemplateSummary = new RetryTemplateSummary(igTemplateRepository, summarizeTemplates);
-  const checkSummaryBatch  = new CheckTemplateSummaryBatch(igTemplateRepository);
-  const checkSummaryBatches = new CheckTemplateSummaryBatches(checkSummaryBatch);
-  const generateIgTemplates          = new GenerateIgTemplates(brandRepository, igTemplateRepository, igTemplateGenerationJobRepository);
-  const checkTemplateGenerationJob   = new CheckTemplateGenerationJob(igTemplateGenerationJobRepository, igTemplateRepository);
-  const listIgTemplateGenerationJobs = new ListIgTemplateGenerationJobs(igTemplateGenerationJobRepository);
+  const generateIgPosts    = new GenerateIgPosts(brandRepository, igPostRepository, igBatchJobRepository);
+  const checkBatchStatus   = new CheckBatchStatus(igBatchJobRepository, igPostRepository, r2Storage);
 
   const listIgPosts             = new ListIgPosts(igPostRepository);
   const getIgPost               = new GetIgPost(igPostRepository);
@@ -493,14 +465,13 @@ export const buildServer = (): Express => {
   const checkSynthesisBatches   = new CheckSynthesisBatches(checkSynthesisBatch);
   const metaGraphService        = new MetaGraphService();
   const connectIgAccount        = new ConnectIgAccount(brandRepository, encryptionService);
-  const uploadIgPostImage       = new UploadIgPostImage(igPostRepository, r2Storage);
   const estimateIgGenerationCost = new EstimateIgGenerationCost();
   const checkExampleSummaries   = new CheckIgExampleSummaryBatches();
   const syncIgPostMetrics       = new SyncIgPostMetrics(igPostRepository, brandRepository, metaGraphService, encryptionService);
   const publishIgPost           = new PublishIgPost(igPostRepository, brandRepository, metaGraphService, encryptionService, syncIgPostMetrics);
 
   const brandController = new BrandController(createBrand, listBrands, getBrand, updateBrand, deleteBrand, createIgExample, deleteIgExample, listIgExamples, retryIgExampleSummary, checkExampleSummaries);
-  const igController    = new IgController(createIgTemplate, updateIgTemplate, deleteIgTemplate, listIgTemplates, generateIgPosts, checkBatchStatus, summarizeTemplates, checkSummaryBatch, checkSummaryBatches, generateIgTemplates, checkTemplateGenerationJob, listIgTemplateGenerationJobs, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, uploadIgPostImage, publishIgPost, syncIgPostMetrics, estimateIgGenerationCost, retryTemplateSummary);
+  const igController    = new IgController(generateIgPosts, checkBatchStatus, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, publishIgPost, syncIgPostMetrics, estimateIgGenerationCost);
 
   // Contact requests use cases + controller
   const createContactRequest       = new CreateContactRequest(contactRequestRepository);
@@ -514,7 +485,7 @@ export const buildServer = (): Express => {
   app.use(buildBrandRoutes(brandController, authMiddleware));
   app.use(buildIgRoutes(igController, authMiddleware));
 
-  startBatchPollingJob(checkBatchStatus, igBatchJobRepository, checkExampleSummaries, checkSummaryBatches, checkTemplateGenerationJob, igTemplateGenerationJobRepository, checkSynthesisBatches, summarizeTemplates);
+  startBatchPollingJob(checkBatchStatus, igBatchJobRepository, checkExampleSummaries, checkSynthesisBatches);
   app.use(buildContactRoutes(contactController, authMiddleware));
   app.use(buildRequestLogRoutes(requestLogController, authMiddleware));
 

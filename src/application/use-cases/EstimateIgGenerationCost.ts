@@ -1,6 +1,6 @@
 import { prisma } from "../../infrastructure/db/prisma";
 import { env } from "../../config/env";
-import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
+import { calculateBatchCost, calculateImageBatchCost } from "../../infrastructure/services/CostCalculator";
 
 export class EstimateIgGenerationCost {
   async execute(brandId: string, input: { quantity: number; topic?: string; campaignContext?: string; contentAssetIds?: string[] }) {
@@ -17,6 +17,14 @@ export class EstimateIgGenerationCost {
     const perPost = history.map(job => job.outputTokens / Math.max(1, job.postCount)).sort((a, b) => a - b);
     const outputTokensMin = Math.round((perPost[Math.floor(perPost.length * .25)] ?? 500) * input.quantity);
     const outputTokensMax = Math.round((perPost[Math.floor(perPost.length * .75)] ?? 900) * input.quantity);
-    return { model, inputTokens, outputTokensMin, outputTokensMax, estimatedCostUsdMin: calculateBatchCost(model, inputTokens, outputTokensMin), estimatedCostUsdMax: calculateBatchCost(model, inputTokens, outputTokensMax) };
+    const imageCostUsd = calculateImageBatchCost(input.quantity);
+    return {
+      model,
+      inputTokens,
+      outputTokensMin,
+      outputTokensMax,
+      estimatedCostUsdMin: calculateBatchCost(model, inputTokens, outputTokensMin) + imageCostUsd,
+      estimatedCostUsdMax: calculateBatchCost(model, inputTokens, outputTokensMax) + imageCostUsd,
+    };
   }
 }

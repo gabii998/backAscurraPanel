@@ -6,11 +6,10 @@ function mapPost(raw: Record<string, unknown>): IgPost {
   return {
     id:               raw.id               as string,
     brandId:          raw.brandId          as string,
-    templateId:       raw.templateId       as string | null,
     batchJobId:       raw.batchJobId       as string | null,
     caption:          raw.caption          as string,
     hashtags:         raw.hashtags         as string[],
-    variables:        (raw.variables       as Record<string, string>) ?? {},
+    imagePrompt:      (raw.imagePrompt     as string) ?? "",
     status:           raw.status           as IgPostStatus,
     approvedById:     raw.approvedById     as string | null,
     approvedAt:       raw.approvedAt       as Date | null,
@@ -41,9 +40,7 @@ export class PrismaIgPostRepository implements IgPostRepository {
         batchJobId: data.batchJobId,
         caption:    data.caption    ?? "",
         hashtags:   data.hashtags   ?? [],
-        variables:  data.variables  ?? {},
         status:     data.status     ?? "generating",
-        templateId: data.templateId ?? null,
       },
     });
     return mapPost(raw as unknown as Record<string, unknown>);
@@ -56,9 +53,7 @@ export class PrismaIgPostRepository implements IgPostRepository {
         batchJobId: d.batchJobId,
         caption:    d.caption    ?? "",
         hashtags:   d.hashtags   ?? [],
-        variables:  d.variables  ?? {},
         status:     d.status     ?? "generating",
-        templateId: d.templateId ?? null,
       })),
     });
     return result.count;
@@ -91,9 +86,8 @@ export class PrismaIgPostRepository implements IgPostRepository {
       data: {
         ...(data.caption          !== undefined && { caption: data.caption }),
         ...(data.hashtags         !== undefined && { hashtags: data.hashtags }),
-        ...(data.variables        !== undefined && { variables: data.variables }),
+        ...(data.imagePrompt      !== undefined && { imagePrompt: data.imagePrompt }),
         ...(data.status           !== undefined && { status: data.status }),
-        ...(data.templateId       !== undefined && { templateId: data.templateId }),
         ...(data.approvedById     !== undefined && { approvedById: data.approvedById }),
         ...(data.approvedAt       !== undefined && { approvedAt: data.approvedAt }),
         ...(data.rejectedAt       !== undefined && { rejectedAt: data.rejectedAt }),

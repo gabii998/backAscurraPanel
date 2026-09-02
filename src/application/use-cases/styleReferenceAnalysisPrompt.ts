@@ -4,8 +4,9 @@
 // Colors/layout/typography are asked for CONCRETELY (approx hex, a named layout pattern) —
 // unlike everything else here, those are design mechanics, not "content" of the referenced
 // post, so describing them concretely doesn't risk the model reproducing someone else's real
-// post. GenerateIgTemplates.ts depends on this concreteness to actually resemble the brand's
-// uploaded references instead of only getting an abstract mood description it can't act on.
+// post. GenerateIgPosts.ts depends on this concreteness when writing each post's imagePrompt,
+// so it can actually resemble the brand's uploaded references instead of only getting an
+// abstract mood description it can't act on.
 export const STYLE_REFERENCE_ANALYSIS_SYSTEM_PROMPT = `Analizá esta referencia de Instagram y devolvé SOLO JSON válido con summary. Incluí:
 - Paleta aproximada: 2-4 colores dominantes en hex aproximado (ej. "Paleta aproximada: #1a2b3c, #f4f1ec, #d99a3d").
 - Patrón de layout, elegido de esta lista: "texto centrado sin imagen", "cita/frase tipográfica", "imagen destacada + texto", "imagen de fondo completo con texto superpuesto", "collage de múltiples imágenes con texto".

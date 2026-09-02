@@ -13,6 +13,7 @@ export interface IgBatchJobCreateData {
 
 export interface IgBatchJobUpdateData {
   openAiBatchId?: string | null;
+  imageOpenAiBatchId?: string | null;
   openAiKeySnapshot?: string | null;
   status?: string;
   errorMessage?: string;

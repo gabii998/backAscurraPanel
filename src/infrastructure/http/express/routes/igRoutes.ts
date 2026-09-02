@@ -1,32 +1,12 @@
 import { Router, type RequestHandler } from "express";
-import multer from "multer";
 import type { IgController } from "../../../../interfaces/http/controllers/IgController";
 import { wrapRequestHandler } from "../wrapRequestHandler";
-
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 export const buildIgRoutes = (
   controller:     IgController,
   authMiddleware: RequestHandler,
 ): Router => {
   const router = Router();
-
-  // Templates
-  router.get("/brands/:brandId/ig-templates",  authMiddleware, wrapRequestHandler(controller.handleListTemplates.bind(controller)));
-  router.post("/brands/:brandId/ig-templates", authMiddleware, wrapRequestHandler(controller.handleCreateTemplate.bind(controller)));
-  router.put("/ig-templates/:id",              authMiddleware, wrapRequestHandler(controller.handleUpdateTemplate.bind(controller)));
-  router.delete("/ig-templates/:id",           authMiddleware, wrapRequestHandler(controller.handleDeleteTemplate.bind(controller)));
-
-  // Template summarization
-  router.post("/ig-templates/summarize",              authMiddleware, wrapRequestHandler(controller.handleSummarize.bind(controller)));
-  router.post("/ig-templates/check-summary-batch",    authMiddleware, wrapRequestHandler(controller.handleCheckSummaryBatch.bind(controller)));
-  router.post("/brands/:brandId/ig-templates/check-summaries", authMiddleware, wrapRequestHandler(controller.handleCheckTemplateSummaries.bind(controller)));
-  router.post("/brands/:brandId/ig-templates/:id/retry-summary", authMiddleware, wrapRequestHandler(controller.handleRetryTemplateSummary.bind(controller)));
-
-  // AI template generation
-  router.post("/brands/:brandId/ig-templates/generate", authMiddleware, wrapRequestHandler(controller.handleGenerateTemplates.bind(controller)));
-  router.get("/brands/:brandId/ig-template-jobs",       authMiddleware, wrapRequestHandler(controller.handleListTemplateJobs.bind(controller)));
-  router.post("/ig-template-jobs/:id/check",            authMiddleware, wrapRequestHandler(controller.handleCheckTemplateJob.bind(controller)));
 
   // Posts
   router.get("/brands/:brandId/ig-posts",          authMiddleware, wrapRequestHandler(controller.handleListPosts.bind(controller)));
@@ -55,7 +35,6 @@ export const buildIgRoutes = (
   router.delete("/brands/:brandId/ig-connect", authMiddleware, wrapRequestHandler(controller.handleDisconnectIgAccount.bind(controller)));
 
   // Publish
-  router.post("/ig-posts/:id/upload-image", authMiddleware, upload.single("image"), wrapRequestHandler(controller.handleUploadImage.bind(controller)));
   router.post("/ig-posts/:id/publish",      authMiddleware, wrapRequestHandler(controller.handlePublishPost.bind(controller)));
   router.post("/ig-posts/:id/sync",         authMiddleware, wrapRequestHandler(controller.handleSyncPostMetrics.bind(controller)));
   router.post("/brands/:brandId/ig-posts/sync-all", authMiddleware, wrapRequestHandler(controller.handleSyncAllMetrics.bind(controller)));

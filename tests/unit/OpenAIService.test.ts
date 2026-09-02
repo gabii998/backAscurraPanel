@@ -451,4 +451,120 @@ describe("OpenAIService", () => {
       expect(result.error).toBe("This request could not be executed before the completion window expired.");
     });
   });
+
+  describe("submitImageBatch", () => {
+    it("routes to /v1/images/generations and omits the image field when there are no reference images", async () => {
+      await service.submitImageBatch([{ customId: "post-0", prompt: "Foto de producto" }]);
+
+      const [line] = await submittedLines();
+      expect(line).toMatchObject({ custom_id: "post-0", method: "POST", url: "/v1/images/generations" });
+      expect(line.body).toMatchObject({ model: "gpt-image-1", prompt: "Foto de producto" });
+      expect(line.body.image).toBeUndefined();
+      expect(batchesCreate).toHaveBeenCalledWith(expect.objectContaining({ endpoint: "/v1/images/generations" }));
+    });
+
+    it("routes to /v1/images/edits and attaches every reference image when references are given", async () => {
+      await service.submitImageBatch(
+        [{ customId: "post-0", prompt: "Foto de producto con el logo" }],
+        ["https://cdn/logo.png", "https://cdn/producto.png"],
+      );
+
+      const [line] = await submittedLines();
+      expect(line.url).toBe("/v1/images/edits");
+      expect(line.body.image).toEqual([
+        { image_url: "https://cdn/logo.png" },
+        { image_url: "https://cdn/producto.png" },
+      ]);
+      expect(batchesCreate).toHaveBeenCalledWith(expect.objectContaining({ endpoint: "/v1/images/edits" }));
+    });
+
+    it("normalizes a reference image URL that's missing its scheme", async () => {
+      await service.submitImageBatch(
+        [{ customId: "post-0", prompt: "p" }],
+        ["instabucket.ascurra-soluciones.com/instagram/brand-1/logo.png"],
+      );
+
+      const [line] = await submittedLines();
+      expect(line.body.image[0].image_url).toBe("https://instabucket.ascurra-soluciones.com/instagram/brand-1/logo.png");
+    });
+
+    it("submits one line per request within the same image batch", async () => {
+      await service.submitImageBatch([
+        { customId: "post-0", prompt: "a" },
+        { customId: "post-1", prompt: "b" },
+      ]);
+
+      const lines = await submittedLines();
+      expect(lines.map(l => l.custom_id)).toEqual(["post-0", "post-1"]);
+    });
+  });
+
+  describe("getBatchStatus auto-retry reuses the failed batch's own endpoint", () => {
+    // The auto-retry path in getBatchStatus is shared by both the text batch and the image
+    // batch — hardcoding /v1/chat/completions here would silently turn a failed image batch
+    // into an invalid chat-completions one on retry.
+    it("recreates an image batch against its own endpoint instead of chat completions", async () => {
+      batchesRetrieve.mockResolvedValue({
+        status: "failed",
+        output_file_id: null,
+        error_file_id: null,
+        input_file_id: "file-abc123",
+        endpoint: "/v1/images/edits",
+        metadata: null,
+        errors: { object: "list", data: [{ code: "invalid_request", message: "Cannot find file file-abc123, or organization org-xyz does not have access to it.", line: null, param: null }] },
+      });
+      batchesCreate.mockResolvedValue({ id: "batch-retry-1", status: "validating", output_file_id: null, error_file_id: null });
+
+      await service.getBatchStatus("batch-1");
+
+      expect(batchesCreate).toHaveBeenCalledWith(expect.objectContaining({ endpoint: "/v1/images/edits" }));
+    });
+  });
+
+  describe("downloadImageBatchResults", () => {
+    it("extracts b64_json from a successful output-file line", async () => {
+      const outputLine = JSON.stringify({
+        id: "batch_req_123",
+        custom_id: "post-0",
+        response: { status_code: 200, request_id: "req_123", body: { data: [{ b64_json: "ZmFrZS1wbmc=" }] } },
+        error: null,
+      });
+      filesContent.mockResolvedValue({ text: async () => outputLine });
+
+      const [result] = await service.downloadImageBatchResults("file-out");
+
+      expect(result).toEqual({ customId: "post-0", b64Json: "ZmFrZS1wbmc=", error: undefined });
+    });
+
+    it("surfaces a per-line error and leaves b64Json undefined", async () => {
+      const errorLine = JSON.stringify({
+        id: "batch_req_123",
+        custom_id: "post-1",
+        response: null,
+        error: { code: "content_policy_violation", message: "El pedido viola la política de contenido." },
+      });
+      filesContent.mockResolvedValue({ text: async () => errorLine });
+
+      const [result] = await service.downloadImageBatchResults("file-err");
+
+      expect(result.customId).toBe("post-1");
+      expect(result.b64Json).toBeUndefined();
+      expect(result.error).toBe("El pedido viola la política de contenido.");
+    });
+
+    it("flags a missing image as an error even when the line itself carries no explicit error", async () => {
+      const emptyLine = JSON.stringify({
+        id: "batch_req_123",
+        custom_id: "post-2",
+        response: { status_code: 200, request_id: "req_123", body: { data: [] } },
+        error: null,
+      });
+      filesContent.mockResolvedValue({ text: async () => emptyLine });
+
+      const [result] = await service.downloadImageBatchResults("file-empty");
+
+      expect(result.b64Json).toBeUndefined();
+      expect(result.error).toBeDefined();
+    });
+  });
 });

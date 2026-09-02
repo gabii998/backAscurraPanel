@@ -19,7 +19,7 @@ export class PublishIgPost {
     const post = await this.postRepo.findById(postId);
     if (!post) throw new Error("POST_NOT_FOUND");
     if (post.status !== "approved") throw new Error("POST_NOT_APPROVED");
-    if (!post.imageUrl) throw new Error("POST_IMAGE_NOT_UPLOADED");
+    if (!post.imageUrl) throw new Error("POST_IMAGE_NOT_READY");
     if (post.publishStatus === "published") throw new Error("POST_ALREADY_PUBLISHED");
 
     const brand = await this.brandRepo.findById(post.brandId);

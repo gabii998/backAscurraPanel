@@ -12,3 +12,12 @@ export function calculateBatchCost(
   const rate = BATCH_RATES[model] ?? BATCH_RATES["gpt-4o-mini"];
   return inputTokens * rate.input + outputTokens * rate.output;
 }
+
+// gpt-image-1 Batch API rate (50% discount applied), USD per generated 1024x1024 image.
+// TODO: confirm this figure against OpenAI's current pricing page before trusting it for
+// real budget decisions — it has not been verified against a live invoice.
+const IMAGE_BATCH_RATE_USD_PER_IMAGE = 0.02;
+
+export function calculateImageBatchCost(imageCount: number): number {
+  return imageCount * IMAGE_BATCH_RATE_USD_PER_IMAGE;
+}

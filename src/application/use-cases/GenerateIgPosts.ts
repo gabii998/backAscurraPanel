@@ -1,6 +1,4 @@
 import type { BrandRepository } from "../../domain/repositories/BrandRepository";
-import type { IgTemplateRepository } from "../../domain/repositories/IgTemplateRepository";
-import type { IgTemplate } from "../../domain/entities/IgTemplate";
 import type { IgPostRepository } from "../../domain/repositories/IgPostRepository";
 import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobRepository";
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
@@ -12,37 +10,31 @@ export interface GenerateIgPostsInput {
   brandId: string;
   quantity: number;
   topic?: string;
-  forceTemplateId?: string;
   contentAssetIds?: string[];
   campaignContext?: string;
 }
 
 export class GenerateIgPosts {
   constructor(
-    private brandRepo:    BrandRepository,
-    private templateRepo: IgTemplateRepository,
-    private postRepo:     IgPostRepository,
-    private jobRepo:      IgBatchJobRepository,
+    private brandRepo: BrandRepository,
+    private postRepo:  IgPostRepository,
+    private jobRepo:   IgBatchJobRepository,
   ) {}
 
   async execute(input: GenerateIgPostsInput): Promise<IgBatchJob> {
-    const { brandId, quantity, topic, forceTemplateId, contentAssetIds = [], campaignContext } = input;
+    const { brandId, quantity, topic, contentAssetIds = [], campaignContext } = input;
 
     if (quantity < 1 || quantity > 50) throw new Error("INVALID_QUANTITY");
 
     const brand = await this.brandRepo.findById(brandId);
     if (!brand) throw new Error("BRAND_NOT_FOUND");
 
-    const allTemplates = await this.templateRepo.findByBrandId(brandId);
-    const readyTemplates = allTemplates.filter(t => (t.summaryStatus === "done" || t.summary) && t.generationStatus === "done");
-    if (readyTemplates.length === 0) throw new Error("NO_TEMPLATES_AVAILABLE");
-
     const [approvedPosts, rejectedPosts, learning, examplePosts, contentAssets] = await Promise.all([
       prisma.igPost.findMany({
         where: { brandId, status: "approved" },
         orderBy: { approvedAt: "desc" },
         take: 10,
-        select: { caption: true, hashtags: true, igReach: true, igEngagement: true, igSaved: true, igSyncedAt: true, template: { select: { name: true } } },
+        select: { caption: true, hashtags: true, igReach: true, igEngagement: true, igSaved: true, igSyncedAt: true },
       }),
       prisma.igPost.findMany({
         where: { brandId, status: "rejected", rejectReason: { not: "" } },
@@ -52,7 +44,7 @@ export class GenerateIgPosts {
       }),
       prisma.brandLearning.findUnique({ where: { brandId } }),
       // Style references are always-on standing context (like companyContext or brand
-      // hashtags) rather than something picked per batch — the brand's writing voice
+      // hashtags) rather than something picked per batch — the brand's visual/writing voice
       // shouldn't be optional. Capped and most-recent-first to bound prompt growth.
       prisma.igExamplePost.findMany({ where: { brandId, assetType: "style_reference", summaryStatus: "done" }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, styleSummary: true } }),
       prisma.igExamplePost.findMany({ where: { brandId, id: { in: contentAssetIds }, assetType: { in: ["product", "system_screenshot", "brand_asset"] } }, select: { id: true, assetType: true, title: true, description: true, imageUrl: true, isPrimaryLogo: true } }),
@@ -62,28 +54,8 @@ export class GenerateIgPosts {
 
     const logoUrl = brand.logoUrl ? normalizeAssetUrl(brand.logoUrl) : "";
 
-    // Templates are a curated, pre-generated library (see GenerateIgTemplates) — post
-    // generation never authors a new layout, it only ever fills an existing template's
-    // {{variable}} placeholders. Every ready template is offered to the model (never
-    // pre-filtered down to an asset-fit "best tier" — a template that fits the topic well
-    // could otherwise get excluded before the model ever sees it just for using fewer
-    // assets); each is annotated with how well it fits the requested assets so the model
-    // can weigh topical fit first and use fit only as a tiebreaker. Any selected content
-    // asset beyond the chosen template's slots is simply not referenced (see the assetUrls
-    // spread in CheckBatchStatus).
-    let templatesForPrompt: IgTemplate[];
-    if (forceTemplateId) {
-      const forced = readyTemplates.find(t => t.id === forceTemplateId);
-      if (!forced) throw new Error("TEMPLATE_NOT_FOUND");
-      templatesForPrompt = [forced];
-    } else {
-      templatesForPrompt = readyTemplates;
-    }
-    const annotatedTemplates = annotateAssetFit(templatesForPrompt, contentAssets.length);
-
     const systemPrompt = buildSystemPrompt(
       brand,
-      annotatedTemplates,
       approvedPosts.slice(0, 5),
       rejectedPosts,
       learning?.insightStatus === "done" ? learning.insights : null,
@@ -98,7 +70,7 @@ export class GenerateIgPosts {
     const requests = Array.from({ length: quantity }, (_, i) => ({
       customId: `post-${i}`,
       systemPrompt,
-      userPrompt: buildUserPrompt(topic, CONTENT_FORMATS[i % CONTENT_FORMATS.length]),
+      userPrompt: buildUserPrompt(topic, CONTENT_FORMATS[i % CONTENT_FORMATS.length], VISUAL_TREATMENTS[i % VISUAL_TREATMENTS.length]),
       responseFormat: "json" as const,
     }));
 
@@ -122,30 +94,12 @@ export class GenerateIgPosts {
         batchJobId: job.id,
         caption: "",
         hashtags: [],
-        variables: {},
         status: "generating" as const,
       })),
     );
 
     return job;
   }
-}
-
-// Annotates (never filters) templates with how well they cover the requested content-asset
-// slots, so the model sees every ready template regardless of asset fit and can prioritize
-// topical/style fit (via each template's "summary") first, using this note only as a
-// secondary tiebreaker — a template that fits the content best shouldn't be excluded before
-// the model ever sees it just because it uses fewer of the selected assets.
-function annotateAssetFit<T extends { variables: string[] }>(templates: T[], requiredCount: number): Array<T & { assetFitNote: string }> {
-  return templates.map(template => {
-    const slotCount = template.variables.filter(v => /^assetImageUrl\d+$/.test(v)).length;
-    const usableSlots = Math.min(slotCount, requiredCount);
-    const overProvisioned = Math.max(0, slotCount - requiredCount);
-    const assetFitNote = requiredCount === 0
-      ? (slotCount === 0 ? "sin slots de imagen, coincide exacto" : `${slotCount} slot(s) de imagen quedarían vacíos (no hay assets seleccionados)`)
-      : `usa ${usableSlots}/${requiredCount} asset(s) seleccionados${overProvisioned > 0 ? `, ${overProvisioned} slot(s) vacíos` : ""}`;
-    return { ...template, assetFitNote };
-  });
 }
 
 const CONTENT_FORMATS = [
@@ -156,6 +110,17 @@ const CONTENT_FORMATS = [
   "pregunta o encuesta (generar interacción)",
 ];
 
+// Suggested per-post visual treatments, rotated across a batch the same way CONTENT_FORMATS
+// rotates copy angles — without this, an image model left to its own devices tends to converge
+// on the same "generic AI image" look (centered product shot, stock lighting) post after post.
+const VISUAL_TREATMENTS = [
+  "foto de producto realista con luz natural, encuadre cercano y asimétrico",
+  "ilustración plana con la paleta de la marca, sin fotografía",
+  "composición tipográfica minimalista con un solo elemento visual de apoyo",
+  "foto \"detrás de escena\" con encuadre informal, no un montaje publicitario",
+  "gráfico o esquema simple si el contenido es educativo, sin relleno decorativo",
+];
+
 function topHashtags(posts: { hashtags: string[] }[], limit = 15): string[] {
   const freq = new Map<string, number>();
   for (const p of posts) for (const h of p.hashtags) freq.set(h, (freq.get(h) ?? 0) + 1);
@@ -164,8 +129,7 @@ function topHashtags(posts: { hashtags: string[] }[], limit = 15): string[] {
 
 function buildSystemPrompt(
   brand: { name: string; industry: string; acknowledge: string; voice: string },
-  templates: Array<{ id: string; name: string; summary: string; variables: string[]; assetFitNote: string }>,
-  approvedPosts: Array<{ caption: string; hashtags: string[]; igReach: number; igEngagement: number; igSaved: number; igSyncedAt: Date | null; template: { name: string } | null }>,
+  approvedPosts: Array<{ caption: string; hashtags: string[]; igReach: number; igEngagement: number; igSaved: number; igSyncedAt: Date | null }>,
   rejectedPosts: Array<{ caption: string; rejectReason: string }>,
   insights: string | null,
   examplePosts: Array<{ styleSummary: string }>,
@@ -175,25 +139,17 @@ function buildSystemPrompt(
   brandHashtags: string[],
   logoUrl: string,
 ): string {
-  const templateList = JSON.stringify(templates.map(t => ({
-    id: t.id,
-    name: t.name,
-    summary: t.summary,
-    variables: t.variables,
-    assetFitNote: t.assetFitNote,
-  })), null, 2);
-
   let contextSection = "";
 
   if (examplePosts.length > 0) {
     const lines = examplePosts.map(p => `- ${p.styleSummary}`).join("\n");
-    contextSection += `\n📌 Referencias de estilo de la marca (guía ABSTRACTA únicamente: composición, paleta, tono, jerarquía. No viste la imagen real de estas referencias, solo esta descripción. NO inventes, menciones ni representes contenido visual concreto a partir de ellas — nada de capturas de pantalla, paneles de interfaz, gráficos de datos ni imágenes específicas. El único contenido visual permitido es el de los assets de contenido provistos explícitamente abajo, si los hay):\n${lines}\n`;
+    contextSection += `\n📌 Referencias de estilo de la marca (guía ABSTRACTA únicamente: composición, paleta, tono, jerarquía. No viste la imagen real de estas referencias, solo esta descripción. NO inventes, menciones ni representes contenido visual concreto a partir de ellas — nada de capturas de pantalla, paneles de interfaz, gráficos de datos ni imágenes específicas. El único contenido visual que puede aparecer TAL CUAL en la imagen final es el de los assets de contenido y el logo listados abajo, si los hay):\n${lines}\n`;
   }
   if (contentAssets.length > 0) {
-    contextSection += `\n🖼️ Assets de contenido seleccionados (usá las URLs solo como valores de assetImageUrl1..3, nunca en HTML):\n${contentAssets.map((asset, index) => `- assetImageUrl${index + 1}: ${asset.imageUrl}; tipo: ${asset.assetType}; título: ${asset.title}; descripción: ${asset.description}`).join("\n")}\nEl template elegido puede tener menos slots {{assetImageUrlN}} que assets provistos: en ese caso el asset excedente no se usa, no lo menciones en el caption ni asumas que va a aparecer visualmente.\n`;
+    contextSection += `\n🖼️ Assets de contenido seleccionados (se van a adjuntar como imágenes de referencia REALES al generar la imagen final — tu "imagePrompt" debe describir cómo se integran, nunca inventar una versión alternativa del producto/captura):\n${contentAssets.map(asset => `- tipo: ${asset.assetType}; título: ${asset.title}; descripción: ${asset.description}`).join("\n")}\n`;
   }
   if (logoUrl) {
-    contextSection += `\n🖼️ Logo de la marca disponible en la variable {{brandLogoUrl}} (usalo si el template elegido tiene esa variable).\n`;
+    contextSection += `\n🖼️ El logo de la marca también se adjunta como imagen de referencia real. Indicá en "imagePrompt" si conviene incluirlo (de forma sutil, no forzada en cada post) y en qué lugar de la composición.\n`;
   }
   if (campaignContext?.trim()) contextSection += `\n📣 Contexto temporal de campaña: ${campaignContext.trim()}\n`;
   const companyLines = Object.entries(companyContext).filter(([, value]) => value?.trim()).map(([key, value]) => `- ${key}: ${value}`).join("\n");
@@ -205,11 +161,10 @@ function buildSystemPrompt(
 
   if (approvedPosts.length > 0) {
     const lines = approvedPosts.map(p => {
-      const tpl = p.template?.name ? ` [template: ${p.template.name}]` : "";
       const metrics = p.igSyncedAt
         ? ` (reach: ${p.igReach}, engagement: ${p.igEngagement}, guardados: ${p.igSaved})`
         : "";
-      return `- "${p.caption}"${tpl}${metrics}`;
+      return `- "${p.caption}"${metrics}`;
     }).join("\n");
     contextSection += `\n✓ Posts recientes APROBADOS (ejemplos de qué funciona):\n${lines}\n`;
   }
@@ -227,17 +182,15 @@ function buildSystemPrompt(
     ? BANNED_CLICHE_GUIDANCE + CAPTION_STRUCTURE_GUIDANCE + FALLBACK_VOICE_EXAMPLES
     : BANNED_CLICHE_GUIDANCE + CAPTION_STRUCTURE_GUIDANCE;
 
-  return `Sos un experto en social media para la marca "${brand.name}" (${brand.industry || "general"}).
+  return `Sos un experto en social media y dirección de arte para la marca "${brand.name}" (${brand.industry || "general"}).
 Descripción de la marca: ${brand.acknowledge || "No especificada"}
 Voz de la marca: ${brand.voice || "No especificada"}
 ${voiceGuidance}
-Templates disponibles (elegí siempre uno de estos por ID — el diseño visual ya está resuelto en el template, vos solo aportás el contenido; "assetFitNote" es solo un desempate secundario, priorizá primero qué tan bien encaja "summary" con el contenido del post):
-${templateList}
+${BANNED_VISUAL_CLICHE_GUIDANCE}
 ${contextSection}
 CONTENIDO:
-- Elegí siempre uno de los templateId provistos arriba, el más apropiado para el post según la descripción del template. Nunca devuelvas templateId: null ni inventes un layout nuevo.
-- Completá el objeto "variables" con un valor para cada placeholder {{variable}} que declare el template elegido (según su lista "variables"), excepto los assetImageUrlN y brandLogoUrl que ya se completan automáticamente.
-- ${contentAssets.length > 0 ? `Hay ${contentAssets.length} asset(s) de contenido disponible(s) (assetImageUrl1${contentAssets.length > 1 ? `..${contentAssets.length}` : ""}).` : "No hay assets de contenido seleccionados para este post."}
+- Escribí un "imagePrompt" concreto y específico para ESTE post puntual (qué se ve, encuadre, iluminación, paleta, tratamiento visual) — nunca una descripción genérica que serviría para cualquier post de la marca. Un modelo de generación de imágenes lo va a usar tal cual.
+- Elegí un tratamiento visual coherente con el contenido (podés tomar como referencia el "Tratamiento visual sugerido" del pedido, pero no es obligatorio si no encaja).
 - Si el "Ángulo/formato sugerido" del pedido no tiene sentido real para el tema, los assets disponibles o los pilares de contenido de la marca, elegí vos un ángulo distinto y contá por qué en "formatRationale".
 - Devolvé SOLO JSON válido, sin texto adicional ni markdown.
 
@@ -245,8 +198,7 @@ Schema de respuesta:
 {
   "caption": "string",
   "hashtags": ["string"],
-  "templateId": "string",
-  "variables": { "key": "value" },
+  "imagePrompt": "string (descripción visual detallada y específica de la imagen a generar)",
   "formatRationale": "string (1 línea: por qué este ángulo/formato tiene sentido para este post)"
 }`;
 }
@@ -269,6 +221,15 @@ const CAPTION_STRUCTURE_GUIDANCE = `
 - Un solo CTA claro, coherente con el objetivo real de ESTE post (uno educativo puede cerrar con una pregunta, no con una oferta).
 `;
 
+const BANNED_VISUAL_CLICHE_GUIDANCE = `
+🚫 Evitá clichés visuales de "imagen genérica de IA" en el "imagePrompt":
+- Composición perfectamente simétrica o centrada en todos los posts de la tanda.
+- Iluminación de stock photo (brillo parejo sin sombras reales, fondo desenfocado genérico).
+- Personas sonriendo directo a cámara sin motivo relacionado al post.
+- Texto superpuesto puramente decorativo que no aporta información real.
+- Reciclar la misma composición/encuadre que otro post de la misma tanda.
+`;
+
 const FALLBACK_VOICE_EXAMPLES = `
 📚 No hay posts aprobados todavía — estos ejemplos GENÉRICOS son tu única referencia de nivel/estructura (fijate en el RECURSO: gancho específico, ritmo, un solo CTA — no copies el tono si no coincide con la voz de marca declarada arriba):
 - Cercano/directo: "Che, esto nos pasó tres veces esta semana: [situación puntual]. Por eso armamos [solución]. ¿Te pasó a vos también?"
@@ -277,10 +238,13 @@ const FALLBACK_VOICE_EXAMPLES = `
 Aplicá con más rigor todavía las reglas anti-clisé de arriba: no hay historial real que corrija desvíos.
 `;
 
-function buildUserPrompt(topic?: string, suggestedFormat?: string): string {
+function buildUserPrompt(topic?: string, suggestedFormat?: string, suggestedVisualTreatment?: string): string {
   const topicPart = topic ? ` sobre: ${topic}` : " relevante para la marca";
   const formatPart = suggestedFormat
     ? ` Ángulo/formato sugerido (uno de varios posibles, pensado para variar el enfoque entre posts de una misma tanda — NO es obligatorio): ${suggestedFormat}. Usalo solo si tiene sentido real para el tema, los assets disponibles y los pilares de contenido/oferta de la marca; si no encaja, elegí vos un ángulo distinto y contalo en "formatRationale".`
     : "";
-  return `Generá un post de Instagram${topicPart}.${formatPart}`;
+  const visualPart = suggestedVisualTreatment
+    ? ` Tratamiento visual sugerido (idem, no obligatorio): ${suggestedVisualTreatment}.`
+    : "";
+  return `Generá un post de Instagram${topicPart}.${formatPart}${visualPart}`;
 }

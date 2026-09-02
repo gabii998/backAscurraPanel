@@ -12,10 +12,8 @@ jest.mock("../../src/infrastructure/services/resolveOpenAIService", () => ({
 
 import { GenerateIgPosts } from "../../src/application/use-cases/GenerateIgPosts";
 import type { BrandRepository } from "../../src/domain/repositories/BrandRepository";
-import type { IgTemplateRepository } from "../../src/domain/repositories/IgTemplateRepository";
 import type { IgPostRepository } from "../../src/domain/repositories/IgPostRepository";
 import type { IgBatchJobRepository } from "../../src/domain/repositories/IgBatchJobRepository";
-import type { IgTemplate } from "../../src/domain/entities/IgTemplate";
 import { prisma } from "../../src/infrastructure/db/prisma";
 import { resolveOpenAIService } from "../../src/infrastructure/services/resolveOpenAIService";
 
@@ -24,25 +22,10 @@ const brand = {
   colorPalette: [] as string[], typography: {}, logoUrl: "", companyContext: {}, openAiModel: "",
 };
 
-function makeTemplate(overrides: Partial<IgTemplate> = {}): IgTemplate {
-  return {
-    id: "tpl-1", brandId: "brand-1", name: "Template", html: "<div></div>", variables: [],
-    summary: "resumen", summaryStatus: "done", summaryError: "", summaryBatchId: null, openAiKeySnapshot: null, isAiGenerated: false,
-    generationStatus: "done", generationError: "", generationJobId: null,
-    createdAt: new Date(), updatedAt: new Date(),
-    ...overrides,
-  };
-}
-
-function makeRepos(templates: IgTemplate[], brandOverrides: Partial<typeof brand> = {}) {
+function makeRepos(brandOverrides: Partial<typeof brand> = {}) {
   const brandRepo: BrandRepository = {
     findById: jest.fn().mockResolvedValue({ ...brand, ...brandOverrides }),
     create: jest.fn(), findAll: jest.fn(), update: jest.fn(), delete: jest.fn(),
-  };
-  const templateRepo: IgTemplateRepository = {
-    findByBrandId: jest.fn().mockResolvedValue(templates),
-    create: jest.fn(), findById: jest.fn(), findByGenerationJobId: jest.fn(), update: jest.fn(), delete: jest.fn(),
-    findPendingSummary: jest.fn(), getPerformanceSummary: jest.fn(),
   };
   const postRepo: IgPostRepository = {
     createMany: jest.fn().mockResolvedValue(0),
@@ -52,7 +35,7 @@ function makeRepos(templates: IgTemplate[], brandOverrides: Partial<typeof brand
     create: jest.fn().mockImplementation(data => Promise.resolve({ id: "job-1", ...data })),
     findByBrandId: jest.fn(), findByStatus: jest.fn(), findById: jest.fn(), update: jest.fn(),
   };
-  return { brandRepo, templateRepo, postRepo, jobRepo };
+  return { brandRepo, postRepo, jobRepo };
 }
 
 let submitBatch: jest.Mock;
@@ -69,109 +52,81 @@ describe("GenerateIgPosts", () => {
     (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([]);
   });
 
-  it("throws NO_TEMPLATES_AVAILABLE when the brand has zero ready templates — it never invents a layout", async () => {
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([]);
+  it("throws BRAND_NOT_FOUND when the brand doesn't exist", async () => {
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
+    (brandRepo.findById as jest.Mock).mockResolvedValue(null);
 
     await expect(
-      new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 }),
-    ).rejects.toThrow("NO_TEMPLATES_AVAILABLE");
+      new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 }),
+    ).rejects.toThrow("BRAND_NOT_FOUND");
   });
 
-  it("excludes templates that are still generating or have no finished summary from selection", async () => {
-    const generating = makeTemplate({ id: "tpl-generating", generationStatus: "generating", summaryStatus: "pending", summary: "" });
-    const ready = makeTemplate({ id: "tpl-ready" });
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([generating, ready]);
+  it("throws INVALID_QUANTITY outside the 1-50 range", async () => {
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
 
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
-
-    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
-    expect(prompt).toContain('"id": "tpl-ready"');
-    expect(prompt).not.toContain('"id": "tpl-generating"');
+    await expect(
+      new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 0 }),
+    ).rejects.toThrow("INVALID_QUANTITY");
+    await expect(
+      new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 51 }),
+    ).rejects.toThrow("INVALID_QUANTITY");
   });
 
-  it("offers every ready template regardless of asset fit, annotated with an assetFitNote instead of excluding worse-fitting ones", async () => {
+  it("throws INVALID_REFERENCE_POSTS when more than 3 content assets are selected", async () => {
     (prisma.igExamplePost.findMany as jest.Mock).mockImplementation(({ where }) =>
       where.assetType === "style_reference" ? Promise.resolve([]) : Promise.resolve([
-        { id: "asset-1", assetType: "product", title: "A", description: "", imageUrl: "https://cdn/a.png", isPrimaryLogo: false },
-        { id: "asset-2", assetType: "product", title: "B", description: "", imageUrl: "https://cdn/b.png", isPrimaryLogo: false },
+        { id: "a1", assetType: "product", title: "", description: "", imageUrl: "https://cdn/a1.png", isPrimaryLogo: false },
+        { id: "a2", assetType: "product", title: "", description: "", imageUrl: "https://cdn/a2.png", isPrimaryLogo: false },
+        { id: "a3", assetType: "product", title: "", description: "", imageUrl: "https://cdn/a3.png", isPrimaryLogo: false },
+        { id: "a4", assetType: "product", title: "", description: "", imageUrl: "https://cdn/a4.png", isPrimaryLogo: false },
       ]),
     );
-    const oneSlot = makeTemplate({ id: "tpl-1-slot", variables: ["assetImageUrl1"] });
-    const threeSlots = makeTemplate({ id: "tpl-3-slots", variables: ["assetImageUrl1", "assetImageUrl2", "assetImageUrl3"] });
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([oneSlot, threeSlots]);
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
 
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-      brandId: "brand-1", quantity: 1, contentAssetIds: ["asset-1", "asset-2"],
-    });
-
-    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
-    expect(prompt).toContain('"id": "tpl-3-slots"');
-    expect(prompt).toContain('"id": "tpl-1-slot"');
-    expect(prompt).toContain('"assetFitNote": "usa 2/2 asset(s) seleccionados, 1 slot(s) vacíos"');
-    expect(prompt).toContain('"assetFitNote": "usa 1/2 asset(s) seleccionados"');
-    expect(prompt).toContain("priorizá primero qué tan bien encaja");
+    await expect(
+      new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({
+        brandId: "brand-1", quantity: 1, contentAssetIds: ["a1", "a2", "a3", "a4"],
+      }),
+    ).rejects.toThrow("INVALID_REFERENCE_POSTS");
   });
 
-  it("annotates over-provisioned templates without dropping them from the candidate list", async () => {
+  it("never selects/authors a template — the batch schema asks for imagePrompt instead", async () => {
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
+
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
+
+    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
+    expect(prompt).not.toContain("templateId");
+    expect(prompt).not.toContain("templateHtml");
+    expect(prompt).toContain('"imagePrompt"');
+  });
+
+  it("describes selected content assets as real reference images rather than assetImageUrlN template variables", async () => {
     (prisma.igExamplePost.findMany as jest.Mock).mockImplementation(({ where }) =>
       where.assetType === "style_reference" ? Promise.resolve([]) : Promise.resolve([
-        { id: "asset-1", assetType: "product", title: "A", description: "", imageUrl: "https://cdn/a.png", isPrimaryLogo: false },
+        { id: "asset-1", assetType: "product", title: "Zapatilla", description: "Producto estrella", imageUrl: "https://cdn/a.png", isPrimaryLogo: false },
       ]),
     );
-    const exact = makeTemplate({ id: "tpl-exact", variables: ["assetImageUrl1"] });
-    const overProvisioned = makeTemplate({ id: "tpl-over", variables: ["assetImageUrl1", "assetImageUrl2", "assetImageUrl3"] });
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([exact, overProvisioned]);
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
 
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({
       brandId: "brand-1", quantity: 1, contentAssetIds: ["asset-1"],
     });
 
     const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
-    expect(prompt).toContain('"id": "tpl-exact"');
-    expect(prompt).toContain('"id": "tpl-over"');
-    expect(prompt).toContain('"assetFitNote": "usa 1/1 asset(s) seleccionados"');
-    expect(prompt).toContain('"assetFitNote": "usa 1/1 asset(s) seleccionados, 2 slot(s) vacíos"');
+    expect(prompt).toContain("Zapatilla");
+    expect(prompt).toContain("imágenes de referencia REALES");
+    expect(prompt).not.toContain("assetImageUrl1");
   });
 
-  it("never throws even when the forced template has fewer slots than the assets provided — the excess asset is simply dropped downstream", async () => {
-    (prisma.igExamplePost.findMany as jest.Mock).mockImplementation(({ where }) =>
-      where.assetType === "style_reference" ? Promise.resolve([]) : Promise.resolve([
-        { id: "asset-1", assetType: "product", title: "A", description: "", imageUrl: "https://cdn/a.png", isPrimaryLogo: false },
-        { id: "asset-2", assetType: "product", title: "B", description: "", imageUrl: "https://cdn/b.png", isPrimaryLogo: false },
-      ]),
-    );
-    const oneSlot = makeTemplate({ id: "tpl-1-slot", variables: ["assetImageUrl1"] });
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([oneSlot]);
+  it("mentions the logo as a real reference image, not a {{brandLogoUrl}} template variable", async () => {
+    const { brandRepo, postRepo, jobRepo } = makeRepos({ logoUrl: "https://cdn/logo.png" });
 
-    await expect(
-      new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-        brandId: "brand-1", quantity: 1, forceTemplateId: "tpl-1-slot", contentAssetIds: ["asset-1", "asset-2"],
-      }),
-    ).resolves.toBeDefined();
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
 
     const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
-    expect(prompt).toContain('"id": "tpl-1-slot"');
-  });
-
-  it("throws TEMPLATE_NOT_FOUND when forceTemplateId doesn't match any ready template", async () => {
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate({ id: "tpl-1" })]);
-
-    await expect(
-      new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-        brandId: "brand-1", quantity: 1, forceTemplateId: "does-not-exist",
-      }),
-    ).rejects.toThrow("TEMPLATE_NOT_FOUND");
-  });
-
-  it("mentions {{brandLogoUrl}} as available when the brand has a logo, without dictating layout/sizing (that now lives in template generation)", async () => {
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()], { logoUrl: "https://cdn/logo.png" });
-
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-      brandId: "brand-1", quantity: 1,
-    });
-
-    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
-    expect(prompt).toContain("{{brandLogoUrl}}");
+    expect(prompt).toContain("logo de la marca también se adjunta como imagen de referencia real");
+    expect(prompt).not.toContain("{{brandLogoUrl}}");
   });
 
   it("tells the model not to invent visual content from the style-reference summary", async () => {
@@ -180,40 +135,23 @@ describe("GenerateIgPosts", () => {
         ? Promise.resolve([{ id: "ref-1", styleSummary: "composición: bloque de imagen superior, paleta fría." }])
         : Promise.resolve([]),
     );
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
 
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-      brandId: "brand-1", quantity: 1,
-    });
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
 
     const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
     expect(prompt).toContain("No viste la imagen real de estas referencias");
     expect(prompt).toContain("NO inventes, menciones ni representes contenido visual concreto");
   });
 
-  it("never asks the model to author a new template's HTML — templateHtml/templateName are gone from the prompt and schema", async () => {
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
+  it("includes anti-cliché guidance for both copy and visuals, plus a fallback voice anchor when the brand has no approved posts yet", async () => {
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
 
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-      brandId: "brand-1", quantity: 1,
-    });
-
-    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
-    expect(prompt).not.toContain("templateHtml");
-    expect(prompt).not.toContain("templateName");
-    expect(prompt).toContain('"templateId": "string"');
-    expect(prompt).toContain("Nunca devuelvas templateId: null ni inventes un layout nuevo");
-  });
-
-  it("always includes anti-cliché and human-caption-structure guidance, plus a fallback voice anchor when the brand has no approved posts yet", async () => {
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
-
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-      brandId: "brand-1", quantity: 1,
-    });
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
 
     const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
     expect(prompt).toContain("Evitá clichés de \"marketing con IA\"");
+    expect(prompt).toContain("Evitá clichés visuales de \"imagen genérica de IA\"");
     expect(prompt).toContain("Cómo suena un caption bien escrito");
     expect(prompt).toContain("No hay posts aprobados todavía");
   });
@@ -221,29 +159,41 @@ describe("GenerateIgPosts", () => {
   it("drops the fallback voice anchor once the brand has real approved-post history", async () => {
     (prisma.igPost.findMany as jest.Mock).mockImplementation(({ where }) =>
       where.status === "approved"
-        ? Promise.resolve([{ caption: "Post real aprobado", hashtags: [], igReach: 0, igEngagement: 0, igSaved: 0, igSyncedAt: null, template: null }])
+        ? Promise.resolve([{ caption: "Post real aprobado", hashtags: [], igReach: 0, igEngagement: 0, igSaved: 0, igSyncedAt: null }])
         : Promise.resolve([]),
     );
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
 
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
-      brandId: "brand-1", quantity: 1,
-    });
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
 
     const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
     expect(prompt).toContain("Evitá clichés de \"marketing con IA\"");
     expect(prompt).not.toContain("No hay posts aprobados todavía");
   });
 
-  it("suggests a format as an overridable angle, not a mandatory one, and asks for a rationale when overridden", async () => {
-    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
+  it("suggests a copy format and a visual treatment as overridable angles, not mandatory ones, and asks for a rationale", async () => {
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
 
-    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({
       brandId: "brand-1", quantity: 1, topic: "lanzamiento de producto",
     });
 
     const batchRequests = submitBatch.mock.calls[0][0] as Array<{ userPrompt: string }>;
     expect(batchRequests[0].userPrompt).toContain("NO es obligatorio");
+    expect(batchRequests[0].userPrompt).toContain("Tratamiento visual sugerido");
     expect(batchRequests[0].userPrompt).toContain("formatRationale");
+  });
+
+  it("creates one draft post row per requested post, all attached to the batch job", async () => {
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
+
+    const job = await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 3 });
+
+    expect(job.id).toBe("job-1");
+    expect(postRepo.createMany).toHaveBeenCalledWith([
+      { brandId: "brand-1", batchJobId: "job-1", caption: "", hashtags: [], status: "generating" },
+      { brandId: "brand-1", batchJobId: "job-1", caption: "", hashtags: [], status: "generating" },
+      { brandId: "brand-1", batchJobId: "job-1", caption: "", hashtags: [], status: "generating" },
+    ]);
   });
 });

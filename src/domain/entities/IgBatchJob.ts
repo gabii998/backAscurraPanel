@@ -2,6 +2,7 @@ export interface IgBatchJob {
   id: string;
   brandId: string;
   openAiBatchId: string | null;
+  imageOpenAiBatchId: string | null;
   openAiKeySnapshot: string | null;
   prompt: string;
   status: string;

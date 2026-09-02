@@ -1,24 +1,29 @@
+import { randomUUID } from "crypto";
 import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobRepository";
 import type { IgPostRepository } from "../../domain/repositories/IgPostRepository";
-import type { IgTemplateRepository } from "../../domain/repositories/IgTemplateRepository";
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
-import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
+import type { R2Storage } from "../../infrastructure/services/R2Storage";
+import { calculateBatchCost, calculateImageBatchCost } from "../../infrastructure/services/CostCalculator";
 import { prisma } from "../../infrastructure/db/prisma";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 import { normalizeAssetUrl } from "../../infrastructure/utils/normalizeAssetUrl";
 
-interface PostResult {
+interface TextResult {
   caption: string;
   hashtags: string[];
-  templateId: string | null;
-  variables: Record<string, string>;
+  imagePrompt: string;
 }
 
+// Generating a batch of posts is now two chained OpenAI batches: first a text batch writes
+// caption/hashtags/imagePrompt per post (see GenerateIgPosts), then an image batch turns each
+// imagePrompt into the actual post image via gpt-image-1. This use-case drives both phases —
+// job.status "processing" means the text batch is in flight, "generating_images" means the
+// image batch is — and is polled repeatedly (see batchPollingJob) until "completed"/"failed".
 export class CheckBatchStatus {
   constructor(
-    private jobRepo:      IgBatchJobRepository,
-    private postRepo:     IgPostRepository,
-    private templateRepo: IgTemplateRepository,
+    private jobRepo:  IgBatchJobRepository,
+    private postRepo: IgPostRepository,
+    private storage:  R2Storage,
   ) {}
 
   async execute(jobId: string): Promise<IgBatchJob> {
@@ -26,21 +31,24 @@ export class CheckBatchStatus {
     if (!job) throw new Error("BATCH_JOB_NOT_FOUND");
 
     if (job.status === "completed" || job.status === "failed") return job;
+    if (job.status === "generating_images") return this.checkImagePhase(job);
+    return this.checkTextPhase(job);
+  }
+
+  private async checkTextPhase(job: IgBatchJob): Promise<IgBatchJob> {
     if (!job.openAiBatchId) return job;
 
     const { service: openAI, keySnapshot, model } = await resolveOpenAIService(job.brandId, job.openAiKeySnapshot);
     const { status, outputFileId, errorFileId, errorDetail, retriedBatchId } = await openAI.getBatchStatus(job.openAiBatchId);
 
     if (retriedBatchId) {
-      return this.jobRepo.update(jobId, { openAiBatchId: retriedBatchId, openAiKeySnapshot: keySnapshot, status: "processing" });
+      return this.jobRepo.update(job.id, { openAiBatchId: retriedBatchId, openAiKeySnapshot: keySnapshot, status: "processing" });
     }
-
     if (status === "failed" || status === "expired" || status === "cancelled") {
-      return this.jobRepo.update(jobId, { status: "failed", errorMessage: errorDetail ?? `OpenAI batch status: ${status}` });
+      return this.jobRepo.update(job.id, { status: "failed", errorMessage: errorDetail ?? `OpenAI batch status: ${status}` });
     }
-
     if (status !== "completed" || (!outputFileId && !errorFileId)) {
-      return this.jobRepo.update(jobId, { status: "processing" });
+      return this.jobRepo.update(job.id, { status: "processing" });
     }
 
     const [outputResults, errorResults] = await Promise.all([
@@ -49,17 +57,11 @@ export class CheckBatchStatus {
     ]);
     const results = [...outputResults, ...errorResults];
     const resultsByCustomId = new Map(results.map(r => [r.customId, r]));
-    const posts = await this.postRepo.findByBatchJobId(jobId);
-    const assets = job.contentAssetIds.length > 0
-      ? await prisma.igExamplePost.findMany({ where: { brandId: job.brandId, id: { in: job.contentAssetIds } }, select: { id: true, imageUrl: true } })
-      : [];
-    const assetUrls = job.contentAssetIds.map(id => {
-      const url = assets.find(asset => asset.id === id)?.imageUrl ?? "";
-      return url ? normalizeAssetUrl(url) : url;
-    });
+    const posts = await this.postRepo.findByBatchJobId(job.id);
 
     let totalInput = 0;
     let totalOutput = 0;
+    const imageRequests: Array<{ customId: string; prompt: string }> = [];
 
     for (let i = 0; i < posts.length; i++) {
       const result = resultsByCustomId.get(`post-${i}`);
@@ -71,58 +73,128 @@ export class CheckBatchStatus {
         totalOutput += result.usage.completionTokens;
       }
 
-      if (result.error) continue;
-
-      const postCostUsd = result.usage
-        ? calculateBatchCost(model, result.usage.promptTokens, result.usage.completionTokens)
-        : 0;
-
-      let parsed: PostResult;
-      try {
-        parsed = JSON.parse(result.content) as PostResult;
-      } catch {
+      if (result.error) {
+        await this.postRepo.update(post.id, { status: "rejected", rejectReason: `[error de generación] ${result.error}` });
         continue;
       }
 
-      const templateId = parsed.templateId ?? null;
+      let parsed: TextResult;
+      try {
+        parsed = JSON.parse(result.content) as TextResult;
+      } catch {
+        await this.postRepo.update(post.id, { status: "rejected", rejectReason: "[error de generación] respuesta inválida" });
+        continue;
+      }
 
       await this.postRepo.update(post.id, {
         caption: parsed.caption ?? "",
         hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags : [],
-        variables: {
-          ...(parsed.variables ?? {}),
-          ...Object.fromEntries(assetUrls.map((url, index) => [`assetImageUrl${index + 1}`, url])),
-          ...(job.brandLogoUrl ? { brandLogoUrl: job.brandLogoUrl } : {}),
-        },
-        templateId,
-        status: "draft",
-        inputTokens: result.usage?.promptTokens ?? 0,
-        outputTokens: result.usage?.completionTokens ?? 0,
-        estimatedCostUsd: postCostUsd,
+        imagePrompt: parsed.imagePrompt ?? "",
       });
+
+      if (parsed.imagePrompt?.trim()) imageRequests.push({ customId: `post-${i}`, prompt: parsed.imagePrompt });
     }
 
-    const estimatedCostUsd = calculateBatchCost(model, totalInput, totalOutput);
-
+    const textCostUsd = calculateBatchCost(model, totalInput, totalOutput);
     await prisma.igCostLog.create({
       data: {
-        brandId:          job.brandId,
-        operation:        "post_generation",
-        entityId:         jobId,
+        brandId:      job.brandId,
+        operation:    "post_generation",
+        entityId:     job.id,
         model,
-        inputTokens:      totalInput,
-        outputTokens:     totalOutput,
-        totalTokens:      totalInput + totalOutput,
-        estimatedCostUsd,
-        requestCount:     results.length,
+        inputTokens:  totalInput,
+        outputTokens: totalOutput,
+        totalTokens:  totalInput + totalOutput,
+        estimatedCostUsd: textCostUsd,
+        requestCount: results.length,
       },
     });
 
-    return this.jobRepo.update(jobId, {
-      status: "completed",
+    if (imageRequests.length === 0) {
+      return this.jobRepo.update(job.id, { status: "completed", inputTokens: totalInput, outputTokens: totalOutput, estimatedCostUsd: textCostUsd });
+    }
+
+    const assets = job.contentAssetIds.length > 0
+      ? await prisma.igExamplePost.findMany({ where: { brandId: job.brandId, id: { in: job.contentAssetIds } }, select: { imageUrl: true } })
+      : [];
+    const referenceImageUrls = [
+      ...(job.brandLogoUrl ? [job.brandLogoUrl] : []),
+      ...assets.map(a => normalizeAssetUrl(a.imageUrl)),
+    ];
+
+    const imageBatchId = await openAI.submitImageBatch(imageRequests, referenceImageUrls);
+
+    return this.jobRepo.update(job.id, {
+      status: "generating_images",
+      imageOpenAiBatchId: imageBatchId,
       inputTokens: totalInput,
       outputTokens: totalOutput,
-      estimatedCostUsd,
+      estimatedCostUsd: textCostUsd,
+    });
+  }
+
+  private async checkImagePhase(job: IgBatchJob): Promise<IgBatchJob> {
+    if (!job.imageOpenAiBatchId) return job;
+
+    const { service: openAI, keySnapshot } = await resolveOpenAIService(job.brandId, job.openAiKeySnapshot);
+    const { status, outputFileId, errorFileId, errorDetail, retriedBatchId } = await openAI.getBatchStatus(job.imageOpenAiBatchId);
+
+    if (retriedBatchId) {
+      return this.jobRepo.update(job.id, { imageOpenAiBatchId: retriedBatchId, openAiKeySnapshot: keySnapshot, status: "generating_images" });
+    }
+    if (status === "failed" || status === "expired" || status === "cancelled") {
+      return this.jobRepo.update(job.id, { status: "failed", errorMessage: errorDetail ?? `OpenAI batch de imagen status: ${status}` });
+    }
+    if (status !== "completed" || (!outputFileId && !errorFileId)) {
+      return this.jobRepo.update(job.id, { status: "generating_images" });
+    }
+
+    const [outputResults, errorResults] = await Promise.all([
+      outputFileId ? openAI.downloadImageBatchResults(outputFileId) : Promise.resolve([]),
+      errorFileId  ? openAI.downloadImageBatchResults(errorFileId)  : Promise.resolve([]),
+    ]);
+    const results = [...outputResults, ...errorResults];
+    const resultsByCustomId = new Map(results.map(r => [r.customId, r]));
+    const posts = await this.postRepo.findByBatchJobId(job.id);
+
+    let imageCount = 0;
+    for (let i = 0; i < posts.length; i++) {
+      const post = posts[i];
+      // Posts already rejected in the text phase (parse/content errors) never got an image
+      // request submitted — nothing to do for them here.
+      if (post.status !== "generating") continue;
+
+      const result = resultsByCustomId.get(`post-${i}`);
+      if (!result || result.error || !result.b64Json) {
+        await this.postRepo.update(post.id, { status: "rejected", rejectReason: `[error de imagen] ${result?.error ?? "sin imagen en la respuesta"}` });
+        continue;
+      }
+
+      const buffer = Buffer.from(result.b64Json, "base64");
+      const key = `instagram/${job.brandId}/posts/${post.id}/${randomUUID()}.png`;
+      const imageUrl = await this.storage.put(key, buffer, "image/png");
+      await this.postRepo.update(post.id, { imageUrl, status: "draft" });
+      imageCount++;
+    }
+
+    const imageCostUsd = calculateImageBatchCost(imageCount);
+    await prisma.igCostLog.create({
+      data: {
+        brandId:      job.brandId,
+        operation:    "post_image_generation",
+        entityId:     job.id,
+        model:        "gpt-image-1",
+        inputTokens:  0,
+        outputTokens: 0,
+        totalTokens:  0,
+        estimatedCostUsd: imageCostUsd,
+        requestCount: results.length,
+      },
+    });
+
+    return this.jobRepo.update(job.id, {
+      status: "completed",
+      estimatedCostUsd: job.estimatedCostUsd + imageCostUsd,
     });
   }
 }

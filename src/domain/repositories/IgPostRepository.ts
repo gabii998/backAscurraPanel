@@ -5,17 +5,14 @@ export interface IgPostCreateData {
   batchJobId: string;
   caption?: string;
   hashtags?: string[];
-  variables?: Record<string, string>;
   status?: IgPostStatus;
-  templateId?: string | null;
 }
 
 export interface IgPostUpdateData {
   caption?: string;
   hashtags?: string[];
-  variables?: Record<string, string>;
+  imagePrompt?: string;
   status?: IgPostStatus;
-  templateId?: string | null;
   approvedById?: string | null;
   approvedAt?: Date | null;
   rejectedAt?: Date | null;

@@ -1,6 +1,10 @@
 import OpenAI from "openai";
-import type { OpenAIBatchService, BatchRequest, BatchResult } from "../../application/services/OpenAIBatchService";
+import type { OpenAIBatchService, BatchRequest, BatchResult, ImageBatchRequest, ImageBatchResult } from "../../application/services/OpenAIBatchService";
 import { normalizeAssetUrl } from "../utils/normalizeAssetUrl";
+
+const IMAGE_MODEL = "gpt-image-1";
+
+type BatchEndpoint = OpenAI.Batches.BatchCreateParams["endpoint"];
 
 // Models occasionally double-escape whitespace inside JSON string values they generate
 // (writing \\n instead of \n), which is valid JSON but decodes to a literal backslash+n
@@ -55,9 +59,39 @@ export class OpenAIService implements OpenAIBatchService {
       }),
     );
 
-    const jsonl = lines.join("\n");
-    const blob  = new Blob([jsonl], { type: "application/jsonl" });
-    const file  = new File([blob], "batch.jsonl", { type: "application/jsonl" });
+    return this.uploadAndCreateBatch(lines.join("\n"), "/v1/chat/completions");
+  }
+
+  // referenceImageUrls come from the job's brand logo / selected content assets — the same set
+  // for every request in the batch, so the endpoint choice (edits vs. generations) is made once
+  // for the whole call rather than per line (a single OpenAI batch can only target one endpoint).
+  //
+  // NOTE: the exact shape of the "image" field for /v1/images/edits batch lines below (an array
+  // of { image_url }) has not been confirmed against a live call or the current OpenAI API
+  // reference — verify this against real traffic before relying on it in production.
+  async submitImageBatch(requests: ImageBatchRequest[], referenceImageUrls: string[] = []): Promise<string> {
+    const hasReferences = referenceImageUrls.length > 0;
+    const endpoint: BatchEndpoint = hasReferences ? "/v1/images/edits" : "/v1/images/generations";
+    const lines = requests.map(r =>
+      JSON.stringify({
+        custom_id: r.customId,
+        method: "POST",
+        url: endpoint,
+        body: {
+          model: IMAGE_MODEL,
+          prompt: r.prompt,
+          size: "1024x1024",
+          ...(hasReferences ? { image: referenceImageUrls.map(url => ({ image_url: normalizeAssetUrl(url) })) } : {}),
+        },
+      }),
+    );
+
+    return this.uploadAndCreateBatch(lines.join("\n"), endpoint);
+  }
+
+  private async uploadAndCreateBatch(jsonl: string, endpoint: BatchEndpoint): Promise<string> {
+    const blob = new Blob([jsonl], { type: "application/jsonl" });
+    const file = new File([blob], "batch.jsonl", { type: "application/jsonl" });
 
     const uploaded = await this.client.files.create({
       file,
@@ -78,7 +112,7 @@ export class OpenAIService implements OpenAIBatchService {
       try {
         batch = await this.client.batches.create({
           input_file_id:    uploaded.id,
-          endpoint:         "/v1/chat/completions",
+          endpoint,
           completion_window: "24h",
         });
         break;
@@ -115,9 +149,13 @@ export class OpenAIService implements OpenAIBatchService {
     const retryCount = Number(batch.metadata?.retryCount ?? 0);
     if (autoRetryOnFileError && batch.status === "failed" && errorDetail && /cannot find file/i.test(errorDetail) && batch.input_file_id && retryCount < 100) {
       try {
+        // Reuse the failed batch's own endpoint rather than assuming chat completions — this
+        // method also retries image batches (/v1/images/edits, /v1/images/generations) now that
+        // it's shared across both phases of post generation, and hardcoding chat completions
+        // here would silently recreate an image batch as an invalid chat-completions one.
         const retried = await this.client.batches.create({
           input_file_id:      batch.input_file_id,
-          endpoint:            "/v1/chat/completions",
+          endpoint:            (batch.endpoint as BatchEndpoint | undefined) ?? "/v1/chat/completions",
           completion_window:   "24h",
           metadata:            { retryCount: String(retryCount + 1) },
         });
@@ -178,6 +216,33 @@ export class OpenAIService implements OpenAIBatchService {
                 totalTokens:      rawUsage.total_tokens,
               }
             : undefined,
+        });
+      } catch {
+        // skip malformed lines
+      }
+    }
+
+    return results;
+  }
+
+  async downloadImageBatchResults(outputFileId: string): Promise<ImageBatchResult[]> {
+    const content = await this.client.files.content(outputFileId);
+    const text    = await content.text();
+    const results: ImageBatchResult[] = [];
+
+    for (const line of text.split("\n").filter(Boolean)) {
+      try {
+        const parsed = JSON.parse(line) as {
+          custom_id: string;
+          response?: { body?: { data?: Array<{ b64_json?: string }>; error?: { message: string } } };
+          error?: { message: string };
+        };
+
+        const b64Json = parsed.response?.body?.data?.[0]?.b64_json;
+        results.push({
+          customId: parsed.custom_id,
+          b64Json,
+          error: parsed.error?.message ?? parsed.response?.body?.error?.message ?? (!b64Json ? "La respuesta no incluyó una imagen" : undefined),
         });
       } catch {
         // skip malformed lines

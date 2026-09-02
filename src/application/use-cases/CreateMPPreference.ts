@@ -18,6 +18,14 @@ export interface CreateMPPreferenceInput {
   payerEmail?: string;
 }
 
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    try { return JSON.stringify(err); } catch { /* not serializable, fall through */ }
+  }
+  return String(err);
+}
+
 export interface CreateMPPreferenceOutput {
   preference_id: string;
   checkout_url: string;
@@ -73,7 +81,7 @@ export class CreateMPPreference {
         webhookPayload:    null,
         forwardStatusCode: null,
         forwardResponse:   "",
-        error:             err instanceof Error ? err.message : String(err),
+        error:             extractErrorMessage(err),
       });
       throw new Error("MP_PREFERENCE_FAILED");
     }
