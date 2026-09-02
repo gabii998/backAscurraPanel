@@ -181,6 +181,7 @@ import { ListIgTemplates } from "../../../application/use-cases/ListIgTemplates"
 import { GenerateIgPosts } from "../../../application/use-cases/GenerateIgPosts";
 import { CheckBatchStatus } from "../../../application/use-cases/CheckBatchStatus";
 import { SummarizeIgTemplates } from "../../../application/use-cases/SummarizeIgTemplates";
+import { RetryTemplateSummary } from "../../../application/use-cases/RetryTemplateSummary";
 import { CheckTemplateSummaryBatch } from "../../../application/use-cases/CheckTemplateSummaryBatch";
 import { CheckTemplateSummaryBatches } from "../../../application/use-cases/CheckTemplateSummaryBatches";
 import { GenerateIgTemplates } from "../../../application/use-cases/GenerateIgTemplates";
@@ -473,6 +474,7 @@ export const buildServer = (): Express => {
   const generateIgPosts    = new GenerateIgPosts(brandRepository, igTemplateRepository, igPostRepository, igBatchJobRepository);
   const checkBatchStatus   = new CheckBatchStatus(igBatchJobRepository, igPostRepository, igTemplateRepository);
   const summarizeTemplates = new SummarizeIgTemplates(igTemplateRepository);
+  const retryTemplateSummary = new RetryTemplateSummary(igTemplateRepository, summarizeTemplates);
   const checkSummaryBatch  = new CheckTemplateSummaryBatch(igTemplateRepository);
   const checkSummaryBatches = new CheckTemplateSummaryBatches(checkSummaryBatch);
   const generateIgTemplates          = new GenerateIgTemplates(brandRepository, igTemplateRepository, igTemplateGenerationJobRepository);
@@ -498,7 +500,7 @@ export const buildServer = (): Express => {
   const publishIgPost           = new PublishIgPost(igPostRepository, brandRepository, metaGraphService, encryptionService, syncIgPostMetrics);
 
   const brandController = new BrandController(createBrand, listBrands, getBrand, updateBrand, deleteBrand, createIgExample, deleteIgExample, listIgExamples, retryIgExampleSummary, checkExampleSummaries);
-  const igController    = new IgController(createIgTemplate, updateIgTemplate, deleteIgTemplate, listIgTemplates, generateIgPosts, checkBatchStatus, summarizeTemplates, checkSummaryBatch, checkSummaryBatches, generateIgTemplates, checkTemplateGenerationJob, listIgTemplateGenerationJobs, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, uploadIgPostImage, publishIgPost, syncIgPostMetrics, estimateIgGenerationCost);
+  const igController    = new IgController(createIgTemplate, updateIgTemplate, deleteIgTemplate, listIgTemplates, generateIgPosts, checkBatchStatus, summarizeTemplates, checkSummaryBatch, checkSummaryBatches, generateIgTemplates, checkTemplateGenerationJob, listIgTemplateGenerationJobs, listIgPosts, getIgPost, approveIgPost, rejectIgPost, listIgBatchJobs, getIgBatchJob, listIgCostLogs, synthesizeBrandLearning, checkSynthesisBatch, connectIgAccount, uploadIgPostImage, publishIgPost, syncIgPostMetrics, estimateIgGenerationCost, retryTemplateSummary);
 
   // Contact requests use cases + controller
   const createContactRequest       = new CreateContactRequest(contactRequestRepository);

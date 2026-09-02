@@ -26,6 +26,7 @@ import type { UploadIgPostImage } from "../../../application/use-cases/UploadIgP
 import type { PublishIgPost } from "../../../application/use-cases/PublishIgPost";
 import type { SyncIgPostMetrics } from "../../../application/use-cases/SyncIgPostMetrics";
 import type { EstimateIgGenerationCost } from "../../../application/use-cases/EstimateIgGenerationCost";
+import type { RetryTemplateSummary } from "../../../application/use-cases/RetryTemplateSummary";
 import type { IgPostStatus } from "../../../domain/entities/IgPost";
 import { prisma } from "../../../infrastructure/db/prisma";
 
@@ -57,6 +58,7 @@ export class IgController {
     private publishIgPost:             PublishIgPost,
     private syncIgPostMetrics:         SyncIgPostMetrics,
     private estimateIgGenerationCost:  EstimateIgGenerationCost,
+    private retryTemplateSummary:      RetryTemplateSummary,
   ) {}
 
   // ── Templates ─────────────────────────────────────────
@@ -254,6 +256,17 @@ export class IgController {
   handleCheckTemplateSummaries = async (req: Request, res: Response): Promise<void> => {
     await this.checkTemplateSummaryBatches.executeForBrand(req.params.brandId);
     res.json(await this.listIgTemplates.execute(req.params.brandId));
+  };
+
+  handleRetryTemplateSummary = async (req: Request, res: Response): Promise<void> => {
+    try {
+      await this.retryTemplateSummary.execute(req.params.brandId, req.params.id);
+      res.json(await this.listIgTemplates.execute(req.params.brandId));
+    } catch (err) {
+      if (err instanceof Error && err.message === "TEMPLATE_NOT_FOUND") { res.status(404).json({ message: err.message }); return; }
+      if (err instanceof Error && err.message === "TEMPLATE_NOT_READY") { res.status(400).json({ message: err.message }); return; }
+      throw err;
+    }
   };
 
   // ── AI Template Generation ────────────────────────────

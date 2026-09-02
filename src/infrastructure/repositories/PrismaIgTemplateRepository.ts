@@ -85,7 +85,13 @@ export class PrismaIgTemplateRepository implements IgTemplateRepository {
 
   async findPendingSummary(): Promise<IgTemplate[]> {
     const rows = await prisma.igTemplate.findMany({
-      where: { summaryStatus: "pending" },
+      // summaryStatus defaults to "pending" for every new row, including the empty-html
+      // stub GenerateIgTemplates creates (generationStatus:"generating") before its AI batch
+      // resolves. Without this filter, a cron sweep running mid-generation would submit that
+      // still-empty html for summarization — OpenAI dutifully replies something like "no HTML
+      // was included", which reads as valid text and gets saved as the summary, permanently
+      // marking a template that never got real content as done.
+      where: { summaryStatus: "pending", generationStatus: "done" },
       orderBy: { createdAt: "asc" },
     });
     return rows.map(r => mapTemplate(r as unknown as Record<string, unknown>));

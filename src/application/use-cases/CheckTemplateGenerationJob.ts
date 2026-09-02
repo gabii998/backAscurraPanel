@@ -94,6 +94,14 @@ export class CheckTemplateGenerationJob {
         html: parsed.html,
         variables,
         generationStatus: "done",
+        // The stub's summaryStatus defaults to "pending" from the moment it's created —
+        // before this real html exists — so a summary cron sweep can (and, given a ~5min
+        // cron cadence against a much longer batch window, reliably did) run against the
+        // still-empty html first and save whatever OpenAI replied to that ("no HTML was
+        // included...") as if it were a real summary. Reset it now that real html exists,
+        // so the next sweep re-summarizes the actual design instead of leaving that stuck.
+        summary: "",
+        summaryStatus: "pending",
       });
       generatedTemplateIds.push(stub.id);
     }
