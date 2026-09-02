@@ -72,3 +72,17 @@ jobs:
             APP_VERSION=${{ github.sha }}
           #cache-from: type=gha # Habilita el caché para construcciones más rápidas
           #cache-to: type=gha,mode=max # Guarda el caché para futuras construcciones
+
+  deploy:
+    needs: build-and-push-docker
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: Prod
+    steps:
+      - name: Trigger Coolify deploy webhook
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ vars.WEBHOOK_URL }}
+          COOLIFY_WEBHOOK_SECRET: ${{ vars.WEBHOOK_SECRET }}
+        run: |
+          curl --fail --silent --show-error -X POST "$COOLIFY_WEBHOOK_URL" \
+            -H "Authorization: Bearer $COOLIFY_WEBHOOK_SECRET"
