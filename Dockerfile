@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM node:20-bookworm-slim AS base
 
 WORKDIR /app
@@ -11,7 +13,7 @@ COPY prisma ./prisma
 
 FROM base AS deps
 
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 RUN npx prisma generate
 
 FROM deps AS build
