@@ -49,7 +49,8 @@ export class HandleMPWebhook {
     let payment;
     try {
       payment = await client.getPayment(input.dataId);
-    } catch {
+    } catch (error) {
+      await this.reportPaymentFetchFailure(config.name, input.dataId, error);
       return;
     }
 
@@ -107,6 +108,18 @@ export class HandleMPWebhook {
         forwardResponse,
       });
     }
+  }
+
+  private async reportPaymentFetchFailure(configName: string, dataId: string, error: unknown): Promise<void> {
+    const detail = error instanceof Error ? error.message
+      : (() => { try { return JSON.stringify(error); } catch { return String(error); } })();
+    await this.ingestError.execute({
+      type: "MERCADOPAGO_WEBHOOK_PAYMENT_FETCH_FAILED",
+      message: `No se pudo consultar el pago ${dataId} en Mercado Pago para la configuracion ${configName}.`,
+      severity: "critical",
+      stackTrace: detail,
+      meta: { url: `payment:${dataId}` },
+    }).catch(() => undefined);
   }
 
   private async reportForwardFailure(configName: string, webhookUrl: string, detail: string): Promise<void> {
