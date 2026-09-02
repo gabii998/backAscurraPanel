@@ -512,7 +512,7 @@ export const buildServer = (): Express => {
   app.use(buildBrandRoutes(brandController, authMiddleware));
   app.use(buildIgRoutes(igController, authMiddleware));
 
-  startBatchPollingJob(checkBatchStatus, igBatchJobRepository, checkExampleSummaries, checkSummaryBatches, checkTemplateGenerationJob, igTemplateGenerationJobRepository, checkSynthesisBatches);
+  startBatchPollingJob(checkBatchStatus, igBatchJobRepository, checkExampleSummaries, checkSummaryBatches, checkTemplateGenerationJob, igTemplateGenerationJobRepository, checkSynthesisBatches, summarizeTemplates);
   app.use(buildContactRoutes(contactController, authMiddleware));
   app.use(buildRequestLogRoutes(requestLogController, authMiddleware));
 

@@ -5,6 +5,7 @@ import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
 import { calculateBatchCost } from "../../infrastructure/services/CostCalculator";
 import { prisma } from "../../infrastructure/db/prisma";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
+import { normalizeAssetUrl } from "../../infrastructure/utils/normalizeAssetUrl";
 
 interface PostResult {
   caption: string;
@@ -52,7 +53,10 @@ export class CheckBatchStatus {
     const assets = job.contentAssetIds.length > 0
       ? await prisma.igExamplePost.findMany({ where: { brandId: job.brandId, id: { in: job.contentAssetIds } }, select: { id: true, imageUrl: true } })
       : [];
-    const assetUrls = job.contentAssetIds.map(id => assets.find(asset => asset.id === id)?.imageUrl ?? "");
+    const assetUrls = job.contentAssetIds.map(id => {
+      const url = assets.find(asset => asset.id === id)?.imageUrl ?? "";
+      return url ? normalizeAssetUrl(url) : url;
+    });
 
     let totalInput = 0;
     let totalOutput = 0;

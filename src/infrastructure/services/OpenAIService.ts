@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { OpenAIBatchService, BatchRequest, BatchResult } from "../../application/services/OpenAIBatchService";
+import { normalizeAssetUrl } from "../utils/normalizeAssetUrl";
 
 // Models occasionally double-escape whitespace inside JSON string values they generate
 // (writing \\n instead of \n), which is valid JSON but decodes to a literal backslash+n
@@ -10,15 +11,6 @@ function normalizeOverEscapedJson(text: string): string {
   return text.replace(/\\\\([nrt])/g, "\\$1");
 }
 
-// Every imageUrl passed here comes from a stored R2Storage.put() result, which should
-// always be an absolute http(s) URL. A handful of older rows were persisted without the
-// scheme (observed in production: "instabucket.ascurra-soluciones.com/..." with no
-// "https://"), which OpenAI's batch API rejects outright with "Failed to download file.
-// File URL is invalid." rather than a normal per-line error. Repair it defensively here
-// so a stale malformed URL doesn't keep failing every retry forever.
-function normalizeImageUrl(url: string): string {
-  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
-}
 
 export class OpenAIService implements OpenAIBatchService {
   private client: OpenAI;
@@ -52,7 +44,7 @@ export class OpenAIService implements OpenAIBatchService {
             { role: "system", content: r.systemPrompt },
             { role: "user", content: r.imageUrl ? [
               { type: "text", text: r.userPrompt },
-              { type: "image_url", image_url: { url: normalizeImageUrl(r.imageUrl), detail: "low" } },
+              { type: "image_url", image_url: { url: normalizeAssetUrl(r.imageUrl), detail: "low" } },
             ] : r.userPrompt },
           ],
           // No fixed temperature: reasoning-family models (e.g. gpt-5.6-luna, o-series)

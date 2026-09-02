@@ -6,6 +6,7 @@ import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobR
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
 import { prisma } from "../../infrastructure/db/prisma";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
+import { normalizeAssetUrl } from "../../infrastructure/utils/normalizeAssetUrl";
 
 export interface GenerateIgPostsInput {
   brandId: string;
@@ -59,7 +60,7 @@ export class GenerateIgPosts {
     const uniqueAssetIds = [...new Set(contentAssetIds)];
     if (contentAssetIds.length !== uniqueAssetIds.length || contentAssets.length !== uniqueAssetIds.length || uniqueAssetIds.length > 3) throw new Error("INVALID_REFERENCE_POSTS");
 
-    const logoUrl = brand.logoUrl || "";
+    const logoUrl = brand.logoUrl ? normalizeAssetUrl(brand.logoUrl) : "";
 
     // Templates are a curated, pre-generated library (see GenerateIgTemplates) — post
     // generation never authors a new layout, it only ever fills an existing template's
