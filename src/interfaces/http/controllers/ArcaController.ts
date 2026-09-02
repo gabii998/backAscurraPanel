@@ -181,6 +181,8 @@ export class ArcaController {
       if (err.message === "VOUCHER_INVALID_DATE")              { res.status(400).json({ message: err.message }); return; }
       if (err.message === "VOUCHER_MISSING_IVA")               { res.status(400).json({ message: err.message }); return; }
       if (err.message === "VOUCHER_MISSING_COMPROBANTES_ASOC") { res.status(400).json({ message: err.message }); return; }
+      if (err.message === "ARCA_VOUCHER_PENDING_RECONCILIATION") { res.status(409).json({ message: err.message }); return; }
+      if (err.message === "ARCA_VOUCHER_ALREADY_REJECTED")      { res.status(409).json({ message: err.message }); return; }
       console.error("[ArcaVoucher] Unexpected error:", err);
       throw err;
     }

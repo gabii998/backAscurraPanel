@@ -48,6 +48,16 @@ function validateVoucher(v: Record<string, unknown>): void {
     if (!Array.isArray(asoc) || asoc.length === 0) {
       throw new Error("VOUCHER_MISSING_COMPROBANTES_ASOC");
     }
+    for (const item of asoc) {
+      if (typeof item !== "object" || item === null) {
+        throw new Error("VOUCHER_MISSING_COMPROBANTES_ASOC");
+      }
+      const { Tipo, PtoVta, Nro, Cuit } = item as Record<string, unknown>;
+      const missingField = [Tipo, PtoVta, Nro, Cuit].some(
+        (f) => f === undefined || f === null || f === ""
+      );
+      if (missingField) throw new Error("VOUCHER_MISSING_COMPROBANTES_ASOC");
+    }
   }
 }
 

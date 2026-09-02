@@ -26,6 +26,7 @@ const baseConfig: ArcaConfig = {
 const existingLog: ArcaLog = {
   id: "log-1",
   configId: "cfg-1",
+  emisorCuit: "30712345678",
   service: "wsfe",
   method: "createNextVoucher",
   request: "{}",
@@ -62,22 +63,25 @@ const makeConfigRepo = (overrides: Partial<ArcaConfigRepository> = {}): ArcaConf
 });
 
 const makeLogRepo = (overrides: Partial<ArcaLogRepository> = {}): ArcaLogRepository => ({
-  create:                  jest.fn().mockResolvedValue({}),
+  create:                  jest.fn().mockResolvedValue({ id: "log-1" }),
   list:                    jest.fn(),
   count:                   jest.fn(),
   findByIdempotencyKey:    jest.fn().mockResolvedValue(null),
+  update:                  jest.fn().mockResolvedValue({}),
   ...overrides,
 });
 
 describe("CreateArcaVoucher", () => {
+  const EMISOR_CUIT = "30712345678";
+
   it("uses the requested emitter CUIT instead of the central config CUIT", async () => {
     const { ArcaService } = require("../../src/infrastructure/services/ArcaService");
     const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
 
-    await uc.execute("key-1", validVoucher, "emisor-guid", "30712345678");
+    await uc.execute("key-1", validVoucher, "emisor-guid", EMISOR_CUIT);
 
     expect(ArcaService).toHaveBeenCalledWith(expect.objectContaining({
-      cuit: "30712345678",
+      cuit: EMISOR_CUIT,
       configId: "cfg-1",
     }));
   });
@@ -91,7 +95,7 @@ describe("CreateArcaVoucher", () => {
       }));
       const logRepo = makeLogRepo({ findByIdempotencyKey: jest.fn().mockResolvedValue(existingLog) });
       const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
-      const result = await uc.execute("key-1", validVoucher, "existing-guid");
+      const result = await uc.execute("key-1", validVoucher, "existing-guid", EMISOR_CUIT);
       expect(result.replayed).toBe(true);
       expect(result.response).toEqual({ CAE: "12345678901234" });
       expect(arcaMock).not.toHaveBeenCalled();
@@ -104,35 +108,56 @@ describe("CreateArcaVoucher", () => {
 
     it("does not create a new log on replay", async () => {
       const logRepo = makeLogRepo({ findByIdempotencyKey: jest.fn().mockResolvedValue(existingLog) });
-      await new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "existing-guid");
+      await new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "existing-guid", EMISOR_CUIT);
       expect(logRepo.create).not.toHaveBeenCalled();
     });
 
     it("returns replayed: false on first successful call", async () => {
-      const result = await new CreateArcaVoucher(makeConfigRepo(), makeLogRepo()).execute("key-1", validVoucher, "new-guid");
+      const result = await new CreateArcaVoucher(makeConfigRepo(), makeLogRepo()).execute("key-1", validVoucher, "new-guid", EMISOR_CUIT);
       expect(result.replayed).toBe(false);
     });
 
-    it("persists idempotencyKey in the success log", async () => {
+    it("persists idempotencyKey when creating the log, then marks it ok on success", async () => {
       const logRepo = makeLogRepo();
-      await new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "my-guid");
+      await new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "my-guid", EMISOR_CUIT);
       expect(logRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ idempotencyKey: "my-guid", status: "ok" })
+        expect.objectContaining({ idempotencyKey: "my-guid", status: "PENDING" })
+      );
+      expect(logRepo.update).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ status: "ok" })
       );
     });
 
-    it("persists idempotencyKey: null in the error log so retry can proceed", async () => {
+    it("keeps the log in PENDING status on an ambiguous SDK failure, so a blind retry is blocked", async () => {
       const { ArcaService } = require("../../src/infrastructure/services/ArcaService");
       (ArcaService as jest.Mock).mockImplementationOnce(() => ({
         billing: { createNextVoucher: jest.fn().mockRejectedValue(new Error("WSFE timeout")) },
       }));
       const logRepo = makeLogRepo();
       await expect(
-        new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "fail-guid")
+        new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "fail-guid", EMISOR_CUIT)
       ).rejects.toThrow("ARCA_VOUCHER_FAILED");
-      expect(logRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ idempotencyKey: null, status: "error" })
+      expect(logRepo.update).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ status: "PENDING", error: "WSFE timeout" })
       );
+    });
+
+    it("throws ARCA_VOUCHER_PENDING_RECONCILIATION when retrying a key stuck in PENDING", async () => {
+      const pendingLog: ArcaLog = { ...existingLog, status: "PENDING", response: JSON.stringify({ pending: true }) };
+      const logRepo = makeLogRepo({ findByIdempotencyKey: jest.fn().mockResolvedValue(pendingLog) });
+      const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
+      await expect(uc.execute("key-1", validVoucher, "existing-guid", EMISOR_CUIT))
+        .rejects.toThrow("ARCA_VOUCHER_PENDING_RECONCILIATION");
+    });
+
+    it("throws ARCA_VOUCHER_ALREADY_REJECTED when retrying a key already rejected by ARCA", async () => {
+      const rejectedLog: ArcaLog = { ...existingLog, status: "REJECTED", response: JSON.stringify({ error: "rejected" }) };
+      const logRepo = makeLogRepo({ findByIdempotencyKey: jest.fn().mockResolvedValue(rejectedLog) });
+      const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
+      await expect(uc.execute("key-1", validVoucher, "existing-guid", EMISOR_CUIT))
+        .rejects.toThrow("ARCA_VOUCHER_ALREADY_REJECTED");
     });
   });
 
@@ -142,7 +167,7 @@ describe("CreateArcaVoucher", () => {
         makeConfigRepo({ getByApiKeyId: jest.fn().mockResolvedValue(null) }),
         makeLogRepo(),
       );
-      await expect(uc.execute("key-1", validVoucher, "guid-1")).rejects.toThrow("ARCA_NOT_CONFIGURED");
+      await expect(uc.execute("key-1", validVoucher, "guid-1", EMISOR_CUIT)).rejects.toThrow("ARCA_NOT_CONFIGURED");
     });
   });
 
@@ -150,77 +175,100 @@ describe("CreateArcaVoucher", () => {
     it("throws VOUCHER_MISSING_FIELDS when a required field is absent", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
       const { CbteFch: _omit, ...incomplete } = validVoucher;
-      await expect(uc.execute("key-1", incomplete, "guid-1")).rejects.toThrow("VOUCHER_MISSING_FIELDS");
+      await expect(uc.execute("key-1", incomplete, "guid-1", EMISOR_CUIT)).rejects.toThrow("VOUCHER_MISSING_FIELDS");
     });
 
     it("throws VOUCHER_INVALID_DATE for non-8-digit CbteFch", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", { ...validVoucher, CbteFch: "2026-07-14" }, "guid-1"))
+      await expect(uc.execute("key-1", { ...validVoucher, CbteFch: "2026-07-14" }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_INVALID_DATE");
     });
 
     it("throws VOUCHER_INVALID_DATE for impossible calendar date", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", { ...validVoucher, CbteFch: "20260231" }, "guid-1"))
+      await expect(uc.execute("key-1", { ...validVoucher, CbteFch: "20260231" }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_INVALID_DATE");
     });
 
     it("throws VOUCHER_MISSING_FIELDS when Concepto=2 and FchServDesde is absent", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", { ...validVoucher, Concepto: 2 }, "guid-1"))
+      await expect(uc.execute("key-1", { ...validVoucher, Concepto: 2 }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_MISSING_FIELDS");
     });
 
     it("throws VOUCHER_MISSING_FIELDS when Concepto=3 and FchServHasta is absent", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", { ...validVoucher, Concepto: 3, FchServDesde: "20260701" }, "guid-1"))
+      await expect(uc.execute("key-1", { ...validVoucher, Concepto: 3, FchServDesde: "20260701" }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_MISSING_FIELDS");
     });
 
     it("throws VOUCHER_MISSING_IVA when ImpIVA > 0 but Iva is absent", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
       const { Iva: _omit, ...noIva } = validVoucher;
-      await expect(uc.execute("key-1", { ...noIva, ImpIVA: 21 }, "guid-1"))
+      await expect(uc.execute("key-1", { ...noIva, ImpIVA: 21 }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_MISSING_IVA");
     });
 
     it("throws VOUCHER_MISSING_IVA when ImpIVA > 0 and Iva is empty array", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", { ...validVoucher, Iva: [] }, "guid-1"))
+      await expect(uc.execute("key-1", { ...validVoucher, Iva: [] }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_MISSING_IVA");
     });
 
     it("does not throw VOUCHER_MISSING_IVA when ImpIVA is 0", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
       const { Iva: _omit, ...noIva } = validVoucher;
-      await expect(uc.execute("key-1", { ...noIva, ImpIVA: 0 }, "guid-1")).resolves.toBeDefined();
+      await expect(uc.execute("key-1", { ...noIva, ImpIVA: 0 }, "guid-1", EMISOR_CUIT)).resolves.toBeDefined();
     });
 
     it("throws VOUCHER_MISSING_COMPROBANTES_ASOC for nota de credito (CbteTipo=3)", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", { ...validVoucher, CbteTipo: 3, ImpIVA: 0, Iva: [] }, "guid-1"))
+      await expect(uc.execute("key-1", { ...validVoucher, CbteTipo: 3, ImpIVA: 0, Iva: [] }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_MISSING_COMPROBANTES_ASOC");
     });
 
     it("throws VOUCHER_MISSING_COMPROBANTES_ASOC for nota de debito (CbteTipo=7)", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", { ...validVoucher, CbteTipo: 7, ImpIVA: 0, Iva: [] }, "guid-1"))
+      await expect(uc.execute("key-1", { ...validVoucher, CbteTipo: 7, ImpIVA: 0, Iva: [] }, "guid-1", EMISOR_CUIT))
         .rejects.toThrow("VOUCHER_MISSING_COMPROBANTES_ASOC");
+    });
+
+    it("throws VOUCHER_MISSING_COMPROBANTES_ASOC when a CbtesAsoc item is missing Cuit (nota de credito)", async () => {
+      const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
+      const voucher = {
+        ...validVoucher, CbteTipo: 3, ImpIVA: 0, Iva: [],
+        CbtesAsoc: [{ Tipo: 1, PtoVta: 1, Nro: 42 }],
+      };
+      await expect(uc.execute("key-1", voucher, "guid-1", EMISOR_CUIT))
+        .rejects.toThrow("VOUCHER_MISSING_COMPROBANTES_ASOC");
+    });
+
+    it("does not throw when CbtesAsoc has all required fields (nota de credito)", async () => {
+      const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
+      const voucher = {
+        ...validVoucher, CbteTipo: 3, ImpIVA: 0, Iva: [],
+        CbtesAsoc: [{ Tipo: 1, PtoVta: 1, Nro: 42, Cuit: "20123456789" }],
+      };
+      await expect(uc.execute("key-1", voucher, "guid-1", EMISOR_CUIT)).resolves.toBeDefined();
     });
   });
 
   describe("ARCA call and logging", () => {
     it("returns ARCA response on success", async () => {
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      const result = await uc.execute("key-1", validVoucher, "guid-1");
+      const result = await uc.execute("key-1", validVoucher, "guid-1", EMISOR_CUIT);
       expect(result.response).toEqual({ CAE: "12345678901234" });
     });
 
     it("writes log with status ok on success", async () => {
       const logRepo = makeLogRepo();
-      await new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "guid-1");
+      await new CreateArcaVoucher(makeConfigRepo(), logRepo).execute("key-1", validVoucher, "guid-1", EMISOR_CUIT);
       expect(logRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ status: "ok", method: "createNextVoucher" })
+        expect.objectContaining({ status: "PENDING", method: "createNextVoucher" })
+      );
+      expect(logRepo.update).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ status: "ok" })
       );
     });
 
@@ -230,7 +278,7 @@ describe("CreateArcaVoucher", () => {
         billing: { createNextVoucher: jest.fn().mockRejectedValue(new Error("WSFE timeout")) },
       }));
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      await expect(uc.execute("key-1", validVoucher, "guid-1")).rejects.toThrow("ARCA_VOUCHER_FAILED");
+      await expect(uc.execute("key-1", validVoucher, "guid-1", EMISOR_CUIT)).rejects.toThrow("ARCA_VOUCHER_FAILED");
     });
 
     it("exposes ARCA error message in err.detail", async () => {
@@ -239,43 +287,14 @@ describe("CreateArcaVoucher", () => {
         billing: { createNextVoucher: jest.fn().mockRejectedValue(new Error("WSFE timeout")) },
       }));
       const uc = new CreateArcaVoucher(makeConfigRepo(), makeLogRepo());
-      const err = await uc.execute("key-1", validVoucher, "guid-1").catch((e: unknown) => e);
+      const err = await uc.execute("key-1", validVoucher, "guid-1", EMISOR_CUIT).catch((e: unknown) => e);
       expect((err as Error & { detail: string }).detail).toBe("WSFE timeout");
     });
 
-    it("writes log with status error when ARCA call fails", async () => {
-      const { ArcaService } = require("../../src/infrastructure/services/ArcaService");
-      (ArcaService as jest.Mock).mockImplementationOnce(() => ({
-        billing: { createNextVoucher: jest.fn().mockRejectedValue(new Error("WSFE timeout")) },
-      }));
-      const logRepo = makeLogRepo();
-      const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
-      await expect(uc.execute("key-1", validVoucher, "guid-1")).rejects.toThrow();
-      expect(logRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ status: "error", error: "WSFE timeout" })
-      );
-    });
-
-    it("does not propagate log failure on success", async () => {
+    it("propagates the error when the initial log write fails, before ever calling ARCA", async () => {
       const logRepo = makeLogRepo({ create: jest.fn().mockRejectedValue(new Error("DB down")) });
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
       const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
-      await expect(uc.execute("key-1", validVoucher, "guid-1")).resolves.toBeDefined();
-      expect(consoleSpy).toHaveBeenCalled();
-      consoleSpy.mockRestore();
-    });
-
-    it("does not propagate log failure on ARCA error", async () => {
-      const { ArcaService } = require("../../src/infrastructure/services/ArcaService");
-      (ArcaService as jest.Mock).mockImplementationOnce(() => ({
-        billing: { createNextVoucher: jest.fn().mockRejectedValue(new Error("WSFE timeout")) },
-      }));
-      const logRepo = makeLogRepo({ create: jest.fn().mockRejectedValue(new Error("DB down")) });
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-      const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
-      await expect(uc.execute("key-1", validVoucher, "guid-1")).rejects.toThrow("ARCA_VOUCHER_FAILED");
-      expect(consoleSpy).toHaveBeenCalled();
-      consoleSpy.mockRestore();
+      await expect(uc.execute("key-1", validVoucher, "guid-1", EMISOR_CUIT)).rejects.toThrow("DB down");
     });
 
     it("throws ARCA_RESPONSE_ERROR when AFIP returns errors inside the response body", async () => {
@@ -287,17 +306,20 @@ describe("CreateArcaVoucher", () => {
       const logRepo = makeLogRepo();
       const uc = new CreateArcaVoucher(makeConfigRepo(), logRepo);
 
-      await expect(uc.execute("key-1", validVoucher, "guid-1"))
+      await expect(uc.execute("key-1", validVoucher, "guid-1", EMISOR_CUIT))
         .rejects.toMatchObject({
           message: "ARCA_RESPONSE_ERROR",
           detail: [{ code: 600, message: "CUIT no autorizado" }],
         });
 
       expect(logRepo.create).toHaveBeenCalledWith(expect.objectContaining({
-        status: "error",
+        status: "PENDING",
+        idempotencyKey: "guid-1",
+      }));
+      expect(logRepo.update).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        status: "REJECTED",
         response: JSON.stringify(afipResponse),
         error: "600: CUIT no autorizado",
-        idempotencyKey: null,
       }));
     });
   });
