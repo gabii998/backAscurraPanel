@@ -2,11 +2,21 @@ jest.mock("../../src/infrastructure/services/resolveOpenAIService", () => ({
   resolveOpenAIService: jest.fn(),
 }));
 
+jest.mock("../../src/infrastructure/db/prisma", () => ({
+  prisma: {
+    igExamplePost: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    },
+  },
+}));
+
 import { GenerateIgTemplates } from "../../src/application/use-cases/GenerateIgTemplates";
 import type { BrandRepository } from "../../src/domain/repositories/BrandRepository";
 import type { IgTemplateRepository } from "../../src/domain/repositories/IgTemplateRepository";
 import type { IgTemplateGenerationJobRepository } from "../../src/domain/repositories/IgTemplateGenerationJobRepository";
 import { resolveOpenAIService } from "../../src/infrastructure/services/resolveOpenAIService";
+import { prisma } from "../../src/infrastructure/db/prisma";
 
 const brand = {
   id: "brand-1", name: "Erpy", industry: "Tecnologia", acknowledge: "", voice: "",
@@ -40,6 +50,8 @@ describe("GenerateIgTemplates", () => {
       service: { submitBatch },
       keySnapshot: "enc-key",
     });
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.igExamplePost.count as jest.Mock).mockResolvedValue(0);
   });
 
   it("rejects a quantity outside 1-8", async () => {
@@ -64,7 +76,8 @@ describe("GenerateIgTemplates", () => {
     expect((jobRepo.create as jest.Mock).mock.calls[0][0]).toMatchObject({ templateCount: 3, status: "processing" });
   });
 
-  it("cycles the requested asset-slot count across per-request user prompts", async () => {
+  it("cycles the requested asset-slot count across per-request user prompts, up to what the brand's asset supply supports", async () => {
+    (prisma.igExamplePost.count as jest.Mock).mockResolvedValue(10); // plenty of content-asset photography
     const { brandRepo, templateRepo, jobRepo } = makeRepos();
 
     await new GenerateIgTemplates(brandRepo, templateRepo, jobRepo).execute({ brandId: "brand-1", quantity: 5 });
@@ -76,6 +89,74 @@ describe("GenerateIgTemplates", () => {
     expect(submitted[2].userPrompt).toContain("{{assetImageUrl2}}");
     expect(submitted[3].userPrompt).toContain("{{assetImageUrl3}}");
     expect(submitted[4].userPrompt).toContain("NO debe incluir ningún placeholder");
+  });
+
+  it("caps requested image slots to the brand's actual content-asset supply, instead of forcing collage layouts with nothing to fill them", async () => {
+    (prisma.igExamplePost.count as jest.Mock).mockResolvedValue(0); // no product/screenshot/brand-asset photography at all
+    const { brandRepo, templateRepo, jobRepo } = makeRepos();
+
+    await new GenerateIgTemplates(brandRepo, templateRepo, jobRepo).execute({ brandId: "brand-1", quantity: 5 });
+
+    const submitted = submitBatch.mock.calls[0][0] as Array<{ userPrompt: string }>;
+    // With zero assets available, the max slot count is capped at 1 — indices 2 and 3
+    // (which would otherwise request 2 and 3 slots) fall back to at most 1.
+    expect(submitted[2].userPrompt).not.toContain("{{assetImageUrl2}}");
+    expect(submitted[3].userPrompt).not.toContain("{{assetImageUrl2}}");
+    expect(submitted[3].userPrompt).not.toContain("{{assetImageUrl3}}");
+  });
+
+  it("suggests a layout archetype as an overridable idea, not a mandatory one, and asks for a rationale", async () => {
+    const { brandRepo, templateRepo, jobRepo } = makeRepos();
+
+    await new GenerateIgTemplates(brandRepo, templateRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
+
+    const submitted = submitBatch.mock.calls[0][0] as Array<{ userPrompt: string }>;
+    expect(submitted[0].userPrompt).toContain("NO es obligatorio");
+    expect(submitted[0].userPrompt).toContain("archetypeRationale");
+  });
+
+  it("wires uploaded style-reference summaries into the template-generation prompt, and derives a fallback palette from their hex mentions when the brand has no explicit colorPalette", async () => {
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
+      { styleSummary: "Paleta aproximada: #123456, #abcdef. Layout: imagen destacada + texto." },
+      { styleSummary: "Paleta aproximada: #123456, #abcdef. Layout: imagen destacada + texto, variante 2." },
+    ]);
+    const { brandRepo, templateRepo, jobRepo } = makeRepos();
+
+    await new GenerateIgTemplates(brandRepo, templateRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
+
+    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Referencias de estilo visual subidas por la marca");
+    expect(prompt).toContain("imagen destacada + texto");
+    expect(prompt).toContain("paleta aproximada, inferida automáticamente");
+    expect(prompt).toContain("#123456");
+    expect(prompt).toContain("#abcdef");
+  });
+
+  it("lets an explicitly configured colorPalette win over any palette inferred from style references", async () => {
+    (prisma.igExamplePost.findMany as jest.Mock).mockResolvedValue([
+      { styleSummary: "Paleta aproximada: #000000, #ffffff." },
+    ]);
+    const { brandRepo, templateRepo, jobRepo } = makeRepos({ colorPalette: ["#155EEF"] });
+
+    await new GenerateIgTemplates(brandRepo, templateRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
+
+    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Usá EXCLUSIVAMENTE los colores de la paleta de marca");
+    expect(prompt).not.toContain("paleta aproximada, inferida automáticamente");
+  });
+
+  it("includes numeric design rules, the gold-standard example, and the brand's company context in the prompt", async () => {
+    const { brandRepo, templateRepo, jobRepo } = makeRepos({
+      companyContext: { contentPillars: "tips de uso, novedades del producto" },
+    });
+
+    await new GenerateIgTemplates(brandRepo, templateRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
+
+    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Reglas numéricas de diseño");
+    expect(prompt).toContain("múltiplos de 8px");
+    expect(prompt).toContain("Ejemplo de referencia");
+    expect(prompt).toContain("contentPillars: tips de uso, novedades del producto");
   });
 
   it("includes palette/typography/logo/contrast rules in the system prompt", async () => {

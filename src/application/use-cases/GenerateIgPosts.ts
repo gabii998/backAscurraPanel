@@ -64,22 +64,26 @@ export class GenerateIgPosts {
 
     // Templates are a curated, pre-generated library (see GenerateIgTemplates) — post
     // generation never authors a new layout, it only ever fills an existing template's
-    // {{variable}} placeholders. When no template has an exact asset-slot match, we pick
-    // the best available fit (most usable slots, fewest empty leftover slots) instead of
-    // erroring or inventing one; any selected content asset beyond the chosen template's
-    // slots is simply not referenced (see the assetUrls spread in CheckBatchStatus).
+    // {{variable}} placeholders. Every ready template is offered to the model (never
+    // pre-filtered down to an asset-fit "best tier" — a template that fits the topic well
+    // could otherwise get excluded before the model ever sees it just for using fewer
+    // assets); each is annotated with how well it fits the requested assets so the model
+    // can weigh topical fit first and use fit only as a tiebreaker. Any selected content
+    // asset beyond the chosen template's slots is simply not referenced (see the assetUrls
+    // spread in CheckBatchStatus).
     let templatesForPrompt: IgTemplate[];
     if (forceTemplateId) {
       const forced = readyTemplates.find(t => t.id === forceTemplateId);
       if (!forced) throw new Error("TEMPLATE_NOT_FOUND");
       templatesForPrompt = [forced];
     } else {
-      templatesForPrompt = selectBestFitTemplates(readyTemplates, contentAssets.length);
+      templatesForPrompt = readyTemplates;
     }
+    const annotatedTemplates = annotateAssetFit(templatesForPrompt, contentAssets.length);
 
     const systemPrompt = buildSystemPrompt(
       brand,
-      templatesForPrompt,
+      annotatedTemplates,
       approvedPosts.slice(0, 5),
       rejectedPosts,
       learning?.insightStatus === "done" ? learning.insights : null,
@@ -127,24 +131,21 @@ export class GenerateIgPosts {
   }
 }
 
-// Ranks templates by how well they cover the requested content-asset slots:
-// (1) maximize usableSlots — how many of the real selected assets this template can place;
-// (2) tiebreak on minimizing overProvisioned — avoid leaving visible empty {{assetImageUrlN}} holes.
-// All templates tied on both are returned so the model can still pick among them by content/style fit.
-function selectBestFitTemplates(templates: IgTemplate[], requiredCount: number): IgTemplate[] {
-  if (templates.length === 0) return [];
-  const ranked = templates.map(template => {
+// Annotates (never filters) templates with how well they cover the requested content-asset
+// slots, so the model sees every ready template regardless of asset fit and can prioritize
+// topical/style fit (via each template's "summary") first, using this note only as a
+// secondary tiebreaker — a template that fits the content best shouldn't be excluded before
+// the model ever sees it just because it uses fewer of the selected assets.
+function annotateAssetFit<T extends { variables: string[] }>(templates: T[], requiredCount: number): Array<T & { assetFitNote: string }> {
+  return templates.map(template => {
     const slotCount = template.variables.filter(v => /^assetImageUrl\d+$/.test(v)).length;
-    return {
-      template,
-      usableSlots: Math.min(slotCount, requiredCount),
-      overProvisioned: Math.max(0, slotCount - requiredCount),
-    };
+    const usableSlots = Math.min(slotCount, requiredCount);
+    const overProvisioned = Math.max(0, slotCount - requiredCount);
+    const assetFitNote = requiredCount === 0
+      ? (slotCount === 0 ? "sin slots de imagen, coincide exacto" : `${slotCount} slot(s) de imagen quedarían vacíos (no hay assets seleccionados)`)
+      : `usa ${usableSlots}/${requiredCount} asset(s) seleccionados${overProvisioned > 0 ? `, ${overProvisioned} slot(s) vacíos` : ""}`;
+    return { ...template, assetFitNote };
   });
-  const maxUsable = Math.max(...ranked.map(r => r.usableSlots));
-  const bestTier = ranked.filter(r => r.usableSlots === maxUsable);
-  const minOverProvisioned = Math.min(...bestTier.map(r => r.overProvisioned));
-  return bestTier.filter(r => r.overProvisioned === minOverProvisioned).map(r => r.template);
 }
 
 const CONTENT_FORMATS = [
@@ -163,7 +164,7 @@ function topHashtags(posts: { hashtags: string[] }[], limit = 15): string[] {
 
 function buildSystemPrompt(
   brand: { name: string; industry: string; acknowledge: string; voice: string },
-  templates: Array<{ id: string; name: string; summary: string; variables: string[] }>,
+  templates: Array<{ id: string; name: string; summary: string; variables: string[]; assetFitNote: string }>,
   approvedPosts: Array<{ caption: string; hashtags: string[]; igReach: number; igEngagement: number; igSaved: number; igSyncedAt: Date | null; template: { name: string } | null }>,
   rejectedPosts: Array<{ caption: string; rejectReason: string }>,
   insights: string | null,
@@ -179,6 +180,7 @@ function buildSystemPrompt(
     name: t.name,
     summary: t.summary,
     variables: t.variables,
+    assetFitNote: t.assetFitNote,
   })), null, 2);
 
   let contextSection = "";
@@ -221,17 +223,22 @@ function buildSystemPrompt(
     contextSection += `\n💡 Patrones aprendidos de esta marca:\n${insights}\n`;
   }
 
+  const voiceGuidance = approvedPosts.length === 0
+    ? BANNED_CLICHE_GUIDANCE + CAPTION_STRUCTURE_GUIDANCE + FALLBACK_VOICE_EXAMPLES
+    : BANNED_CLICHE_GUIDANCE + CAPTION_STRUCTURE_GUIDANCE;
+
   return `Sos un experto en social media para la marca "${brand.name}" (${brand.industry || "general"}).
 Descripción de la marca: ${brand.acknowledge || "No especificada"}
 Voz de la marca: ${brand.voice || "No especificada"}
-
-Templates disponibles (elegí siempre uno de estos por ID — el diseño visual ya está resuelto en el template, vos solo aportás el contenido):
+${voiceGuidance}
+Templates disponibles (elegí siempre uno de estos por ID — el diseño visual ya está resuelto en el template, vos solo aportás el contenido; "assetFitNote" es solo un desempate secundario, priorizá primero qué tan bien encaja "summary" con el contenido del post):
 ${templateList}
 ${contextSection}
 CONTENIDO:
 - Elegí siempre uno de los templateId provistos arriba, el más apropiado para el post según la descripción del template. Nunca devuelvas templateId: null ni inventes un layout nuevo.
 - Completá el objeto "variables" con un valor para cada placeholder {{variable}} que declare el template elegido (según su lista "variables"), excepto los assetImageUrlN y brandLogoUrl que ya se completan automáticamente.
 - ${contentAssets.length > 0 ? `Hay ${contentAssets.length} asset(s) de contenido disponible(s) (assetImageUrl1${contentAssets.length > 1 ? `..${contentAssets.length}` : ""}).` : "No hay assets de contenido seleccionados para este post."}
+- Si el "Ángulo/formato sugerido" del pedido no tiene sentido real para el tema, los assets disponibles o los pilares de contenido de la marca, elegí vos un ángulo distinto y contá por qué en "formatRationale".
 - Devolvé SOLO JSON válido, sin texto adicional ni markdown.
 
 Schema de respuesta:
@@ -239,12 +246,41 @@ Schema de respuesta:
   "caption": "string",
   "hashtags": ["string"],
   "templateId": "string",
-  "variables": { "key": "value" }
+  "variables": { "key": "value" },
+  "formatRationale": "string (1 línea: por qué este ángulo/formato tiene sentido para este post)"
 }`;
 }
 
-function buildUserPrompt(topic?: string, format?: string): string {
+const BANNED_CLICHE_GUIDANCE = `
+🚫 Evitá clichés de "marketing con IA":
+- Aperturas gastadas: "¡Descubre...!", "¿Sabías que...?", "En [marca] creemos que...".
+- Cierres gastados: "¡No te lo pierdas!", "¡Contactanos hoy!" por reflejo, sin que el post lo amerite.
+- Relleno de emojis (uno por línea/oración a modo decorativo).
+- Varios CTAs apilados — elegí UNO solo, el más relevante para este post puntual.
+- Superlativos vacíos repetidos como muletilla ("increíble", "único", "el mejor").
+- Repetir la misma estructura de apertura/cierre en todos los posts de una tanda.
+`;
+
+const CAPTION_STRUCTURE_GUIDANCE = `
+✍️ Cómo suena un caption bien escrito (community manager humano, no plantilla de IA):
+- Primera línea = gancho específico de ESTE tema puntual, no una frase genérica que serviría para cualquier post.
+- Tono conversacional, contracciones permitidas salvo que la voz de marca pida lo contrario.
+- Ritmo variado entre posts: no repitas siempre la misma cantidad de líneas / patrón de puntuación.
+- Un solo CTA claro, coherente con el objetivo real de ESTE post (uno educativo puede cerrar con una pregunta, no con una oferta).
+`;
+
+const FALLBACK_VOICE_EXAMPLES = `
+📚 No hay posts aprobados todavía — estos ejemplos GENÉRICOS son tu única referencia de nivel/estructura (fijate en el RECURSO: gancho específico, ritmo, un solo CTA — no copies el tono si no coincide con la voz de marca declarada arriba):
+- Cercano/directo: "Che, esto nos pasó tres veces esta semana: [situación puntual]. Por eso armamos [solución]. ¿Te pasó a vos también?"
+- Editorial/profesional: "Hay una pregunta que nos hacen seguido: [pregunta puntual del rubro]. La respuesta corta: depende de [factor concreto]. Te contamos cuándo sí y cuándo no."
+- Cálido/comunidad: "Esta semana [detalle concreto y humano]. Nos encantaría saber cómo lo vivís vos — contanos en los comentarios."
+Aplicá con más rigor todavía las reglas anti-clisé de arriba: no hay historial real que corrija desvíos.
+`;
+
+function buildUserPrompt(topic?: string, suggestedFormat?: string): string {
   const topicPart = topic ? ` sobre: ${topic}` : " relevante para la marca";
-  const formatPart = format ? ` Formato: ${format}.` : "";
+  const formatPart = suggestedFormat
+    ? ` Ángulo/formato sugerido (uno de varios posibles, pensado para variar el enfoque entre posts de una misma tanda — NO es obligatorio): ${suggestedFormat}. Usalo solo si tiene sentido real para el tema, los assets disponibles y los pilares de contenido/oferta de la marca; si no encaja, elegí vos un ángulo distinto y contalo en "formatRationale".`
+    : "";
   return `Generá un post de Instagram${topicPart}.${formatPart}`;
 }

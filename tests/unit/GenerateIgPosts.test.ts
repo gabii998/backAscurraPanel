@@ -55,10 +55,13 @@ function makeRepos(templates: IgTemplate[], brandOverrides: Partial<typeof brand
   return { brandRepo, templateRepo, postRepo, jobRepo };
 }
 
+let submitBatch: jest.Mock;
+
 describe("GenerateIgPosts", () => {
   beforeEach(() => {
+    submitBatch = jest.fn().mockResolvedValue("batch-1");
     (resolveOpenAIService as jest.Mock).mockResolvedValue({
-      service: { submitBatch: jest.fn().mockResolvedValue("batch-1") },
+      service: { submitBatch },
       keySnapshot: "enc-key",
     });
     (prisma.igPost.findMany as jest.Mock).mockResolvedValue([]);
@@ -86,7 +89,7 @@ describe("GenerateIgPosts", () => {
     expect(prompt).not.toContain('"id": "tpl-generating"');
   });
 
-  it("selects the template with the most matching assetImageUrlN slots when no exact match exists", async () => {
+  it("offers every ready template regardless of asset fit, annotated with an assetFitNote instead of excluding worse-fitting ones", async () => {
     (prisma.igExamplePost.findMany as jest.Mock).mockImplementation(({ where }) =>
       where.assetType === "style_reference" ? Promise.resolve([]) : Promise.resolve([
         { id: "asset-1", assetType: "product", title: "A", description: "", imageUrl: "https://cdn/a.png", isPrimaryLogo: false },
@@ -103,10 +106,13 @@ describe("GenerateIgPosts", () => {
 
     const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
     expect(prompt).toContain('"id": "tpl-3-slots"');
-    expect(prompt).not.toContain('"id": "tpl-1-slot"');
+    expect(prompt).toContain('"id": "tpl-1-slot"');
+    expect(prompt).toContain('"assetFitNote": "usa 2/2 asset(s) seleccionados, 1 slot(s) vacíos"');
+    expect(prompt).toContain('"assetFitNote": "usa 1/2 asset(s) seleccionados"');
+    expect(prompt).toContain("priorizá primero qué tan bien encaja");
   });
 
-  it("prefers the template with fewest over-provisioned slots when multiple templates achieve the same usable-slot count", async () => {
+  it("annotates over-provisioned templates without dropping them from the candidate list", async () => {
     (prisma.igExamplePost.findMany as jest.Mock).mockImplementation(({ where }) =>
       where.assetType === "style_reference" ? Promise.resolve([]) : Promise.resolve([
         { id: "asset-1", assetType: "product", title: "A", description: "", imageUrl: "https://cdn/a.png", isPrimaryLogo: false },
@@ -122,7 +128,9 @@ describe("GenerateIgPosts", () => {
 
     const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
     expect(prompt).toContain('"id": "tpl-exact"');
-    expect(prompt).not.toContain('"id": "tpl-over"');
+    expect(prompt).toContain('"id": "tpl-over"');
+    expect(prompt).toContain('"assetFitNote": "usa 1/1 asset(s) seleccionados"');
+    expect(prompt).toContain('"assetFitNote": "usa 1/1 asset(s) seleccionados, 2 slot(s) vacíos"');
   });
 
   it("never throws even when the forced template has fewer slots than the assets provided — the excess asset is simply dropped downstream", async () => {
@@ -195,5 +203,47 @@ describe("GenerateIgPosts", () => {
     expect(prompt).not.toContain("templateName");
     expect(prompt).toContain('"templateId": "string"');
     expect(prompt).toContain("Nunca devuelvas templateId: null ni inventes un layout nuevo");
+  });
+
+  it("always includes anti-cliché and human-caption-structure guidance, plus a fallback voice anchor when the brand has no approved posts yet", async () => {
+    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
+
+    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
+      brandId: "brand-1", quantity: 1,
+    });
+
+    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Evitá clichés de \"marketing con IA\"");
+    expect(prompt).toContain("Cómo suena un caption bien escrito");
+    expect(prompt).toContain("No hay posts aprobados todavía");
+  });
+
+  it("drops the fallback voice anchor once the brand has real approved-post history", async () => {
+    (prisma.igPost.findMany as jest.Mock).mockImplementation(({ where }) =>
+      where.status === "approved"
+        ? Promise.resolve([{ caption: "Post real aprobado", hashtags: [], igReach: 0, igEngagement: 0, igSaved: 0, igSyncedAt: null, template: null }])
+        : Promise.resolve([]),
+    );
+    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
+
+    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
+      brandId: "brand-1", quantity: 1,
+    });
+
+    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Evitá clichés de \"marketing con IA\"");
+    expect(prompt).not.toContain("No hay posts aprobados todavía");
+  });
+
+  it("suggests a format as an overridable angle, not a mandatory one, and asks for a rationale when overridden", async () => {
+    const { brandRepo, templateRepo, postRepo, jobRepo } = makeRepos([makeTemplate()]);
+
+    await new GenerateIgPosts(brandRepo, templateRepo, postRepo, jobRepo).execute({
+      brandId: "brand-1", quantity: 1, topic: "lanzamiento de producto",
+    });
+
+    const batchRequests = submitBatch.mock.calls[0][0] as Array<{ userPrompt: string }>;
+    expect(batchRequests[0].userPrompt).toContain("NO es obligatorio");
+    expect(batchRequests[0].userPrompt).toContain("formatRationale");
   });
 });

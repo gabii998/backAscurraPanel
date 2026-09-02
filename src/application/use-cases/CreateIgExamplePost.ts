@@ -4,6 +4,7 @@ import type { BrandRepository } from "../../domain/repositories/BrandRepository"
 import type { R2Storage } from "../../infrastructure/services/R2Storage";
 import { prisma } from "../../infrastructure/db/prisma";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
+import { STYLE_REFERENCE_ANALYSIS_SYSTEM_PROMPT, STYLE_REFERENCE_ANALYSIS_USER_PROMPT } from "./styleReferenceAnalysisPrompt";
 
 export interface CreateIgExamplePostInput {
   brandId: string;
@@ -51,8 +52,8 @@ export class CreateIgExamplePost {
       const { service, keySnapshot } = await resolveOpenAIService(input.brandId);
       const batchId = await service.submitBatch([{
         customId: `example-summary-${example.id}`,
-        systemPrompt: "Analizá esta referencia de Instagram. Respondé SOLO JSON válido con summary. Describí ÚNICAMENTE patrones abstractos: composición, paleta, jerarquía, tono, longitud, emojis, puntuación y estructura. No transcribas ni menciones texto visible, temas, marcas, productos, ofertas, hashtags, frases ni CTAs. No describas elementos visuales concretos que puedan interpretarse como contenido a replicar (capturas de pantalla, paneles de interfaz, gráficos de datos específicos, fotos de productos): referite a ellos solo en términos de composición abstracta (ej. 'bloque de imagen', nunca qué muestra).",
-        userPrompt: "Generá una ficha abstracta de estilo, sin conservar contenido de la publicación.",
+        systemPrompt: STYLE_REFERENCE_ANALYSIS_SYSTEM_PROMPT,
+        userPrompt: STYLE_REFERENCE_ANALYSIS_USER_PROMPT,
         imageUrl,
         responseFormat: "json",
       }]);
