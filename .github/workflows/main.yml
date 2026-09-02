@@ -85,7 +85,7 @@ jobs:
           COOLIFY_WEBHOOK_SECRET: ${{ vars.WEBHOOK_SECRET }}
         run: |
           http_status=$(curl --silent --show-error -o /tmp/webhook_response.txt -w "%{http_code}" \
-            --request GET "$COOLIFY_WEBHOOK_URL" \
+            --request POST "$COOLIFY_WEBHOOK_URL" \
             --header "Authorization: Bearer $COOLIFY_WEBHOOK_SECRET")
           echo "Coolify respondió con HTTP $http_status:"
           cat /tmp/webhook_response.txt
