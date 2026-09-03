@@ -42,6 +42,7 @@ const makeLogRepo = (): ArcaLogRepository => ({
   list: jest.fn(),
   count: jest.fn(),
   findByIdempotencyKey: jest.fn(),
+  update: jest.fn(),
 });
 
 describe("GetArcaTaxpayer", () => {

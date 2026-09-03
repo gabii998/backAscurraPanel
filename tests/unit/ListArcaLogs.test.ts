@@ -6,6 +6,7 @@ const makeRepo = (overrides: Partial<ArcaLogRepository> = {}): ArcaLogRepository
   list:                 jest.fn().mockResolvedValue([]),
   count:                jest.fn().mockResolvedValue(0),
   findByIdempotencyKey: jest.fn().mockResolvedValue(null),
+  update:               jest.fn(),
   ...overrides,
 });
 

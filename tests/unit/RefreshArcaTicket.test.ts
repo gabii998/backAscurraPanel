@@ -15,6 +15,7 @@ jest.mock("@arcasdk/core", () => ({
 }));
 
 import { promises as fs } from "fs";
+import path from "path";
 import { RefreshArcaTicket } from "../../src/application/use-cases/RefreshArcaTicket";
 import type { ArcaConfigRepository } from "../../src/domain/repositories/ArcaConfigRepository";
 import type { ArcaConfig } from "../../src/domain/entities/ArcaConfig";
@@ -48,7 +49,7 @@ describe("RefreshArcaTicket", () => {
   it("clears every cached ticket and obtains a fresh WSFE ticket", async () => {
     const result = await new RefreshArcaTicket(makeRepo()).execute("cfg-1");
 
-    expect(fs.rm).toHaveBeenCalledWith(expect.stringContaining("arca-tickets/cfg-1"), { recursive: true, force: true });
+    expect(fs.rm).toHaveBeenCalledWith(expect.stringContaining(path.join("arca-tickets", "cfg-1")), { recursive: true, force: true });
     expect(storageMock).toHaveBeenCalledWith(expect.objectContaining({ cuit: 20123456789, production: false }));
     expect(loginMock).toHaveBeenCalledWith("wsfe");
     expect(result).toEqual({ service: "wsfe", expiresAt: new Date("2026-08-11T12:00:00.000Z") });

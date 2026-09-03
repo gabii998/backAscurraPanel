@@ -87,4 +87,86 @@ describe("CreateMPPreference", () => {
       status: "pending",
     }));
   });
+
+  it("returns the production checkout URL for production credentials", async () => {
+    createPreferenceMock.mockResolvedValue({
+      id: "pref-1",
+      init_point: "https://checkout.test",
+      sandbox_init_point: "https://sandbox.test",
+    });
+    const uc = new CreateMPPreference(makeConfigRepo(), makeLogRepo());
+
+    const result = await uc.execute({
+      apiKeyId: "api-key-1",
+      externalReference: "ref-1",
+      items: [{ title: "Plan", quantity: 1, unit_price: 1000 }],
+    });
+
+    expect(result.checkout_url).toBe("https://checkout.test");
+  });
+
+  it("returns the sandbox checkout URL when the config uses TEST credentials, since MP rejects production checkout for them", async () => {
+    createPreferenceMock.mockResolvedValue({
+      id: "pref-1",
+      init_point: "https://checkout.test",
+      sandbox_init_point: "https://sandbox.test",
+    });
+    const configRepo = makeConfigRepo({
+      getByApiKeyId: jest.fn().mockResolvedValue({ ...config, accessToken: "TEST-abc123" }),
+    });
+    const uc = new CreateMPPreference(configRepo, makeLogRepo());
+
+    const result = await uc.execute({
+      apiKeyId: "api-key-1",
+      externalReference: "ref-1",
+      items: [{ title: "Plan", quantity: 1, unit_price: 1000 }],
+    });
+
+    expect(result.checkout_url).toBe("https://sandbox.test");
+  });
+
+  it("URL-encodes the config name in the notification_url, since names may contain spaces or brackets", async () => {
+    createPreferenceMock.mockResolvedValue({
+      id: "pref-1",
+      init_point: "https://checkout.test",
+      sandbox_init_point: "https://sandbox.test",
+    });
+    const configRepo = makeConfigRepo({
+      getByApiKeyId: jest.fn().mockResolvedValue({ ...config, name: "[DEV] Erpy" }),
+    });
+    const uc = new CreateMPPreference(configRepo, makeLogRepo());
+
+    await uc.execute({
+      apiKeyId: "api-key-1",
+      externalReference: "ref-1",
+      items: [{ title: "Plan", quantity: 1, unit_price: 1000 }],
+    });
+
+    expect(createPreferenceMock).toHaveBeenCalledWith(expect.objectContaining({
+      notification_url: expect.stringContaining("/mp/webhook/%5BDEV%5D%20Erpy"),
+    }));
+  });
+
+  it("stores a readable error message when MercadoPago rejects with a plain error object instead of an Error instance", async () => {
+    createPreferenceMock.mockRejectedValue({
+      message: "notification_url invalid. Wrong format",
+      error: "invalid_notification_url",
+      status: 400,
+      cause: null,
+    });
+    const logRepo = makeLogRepo();
+    const uc = new CreateMPPreference(makeConfigRepo(), logRepo);
+
+    await expect(uc.execute({
+      apiKeyId: "api-key-1",
+      externalReference: "ref-1",
+      items: [{ title: "Plan", quantity: 1, unit_price: 1000 }],
+    })).rejects.toThrow("MP_PREFERENCE_FAILED");
+
+    const loggedError = (logRepo.create as jest.Mock).mock.calls[0][0].error;
+    expect(loggedError).not.toBe("[object Object]");
+    expect(JSON.parse(loggedError)).toEqual(expect.objectContaining({
+      error: "invalid_notification_url",
+    }));
+  });
 });

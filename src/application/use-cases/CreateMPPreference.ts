@@ -86,7 +86,14 @@ export class CreateMPPreference {
       throw new Error("MP_PREFERENCE_FAILED");
     }
 
-    const checkoutUrl        = preference.init_point ?? "";
+    // Con credenciales de prueba (TEST-...), init_point apunta al checkout de
+    // producción y Mercado Pago lo rechaza ("una de las partes es de prueba").
+    // Hay que redirigir a sandbox_init_point en ese caso.
+    const isTestCredential = config.accessToken.startsWith("TEST-");
+    const checkoutUrl = (isTestCredential ? preference.sandbox_init_point : preference.init_point)
+      ?? preference.init_point
+      ?? preference.sandbox_init_point
+      ?? "";
     const sandboxCheckoutUrl = preference.sandbox_init_point ?? "";
 
     await this.logRepo.create({

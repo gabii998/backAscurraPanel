@@ -113,4 +113,28 @@ describe("HandleMPWebhook", () => {
       forwardStatusCode: 503,
     }));
   });
+
+  it("records a critical operational error when the Mercado Pago payment lookup fails, instead of discarding it silently", async () => {
+    getPaymentMock.mockRejectedValue({ message: "payment not found", status: 404 });
+    const logRepo: MercadoPagoLogRepository = {
+      create: jest.fn(),
+      list: jest.fn(),
+      getByExternalReference: jest.fn(),
+      updateStatus: jest.fn(),
+    };
+
+    await expect(new HandleMPWebhook(configRepo, logRepo, ingestError as any).execute({
+      configName: "default",
+      type: "payment",
+      dataId: "123",
+      rawBody: {},
+    })).resolves.toBeUndefined();
+
+    expect(ingestError.execute).toHaveBeenCalledWith(expect.objectContaining({
+      type: "MERCADOPAGO_WEBHOOK_PAYMENT_FETCH_FAILED",
+      severity: "critical",
+    }));
+    expect(logRepo.getByExternalReference).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });

@@ -18,4 +18,11 @@ export class MercadoPagoClient {
   getPayment(id: string) {
     return this.payment.get({ id });
   }
+
+  async findPaymentByExternalReference(externalReference: string) {
+    const result = await this.payment.search({
+      options: { external_reference: externalReference, sort: "date_created", criteria: "desc" },
+    });
+    return result.results?.[0] ?? null;
+  }
 }
