@@ -6,6 +6,7 @@ import { PrismaSessionRepository } from "../../repositories/PrismaSessionReposit
 import { PrismaProjectRepository } from "../../repositories/PrismaProjectRepository";
 import { PrismaTaskRepository } from "../../repositories/PrismaTaskRepository";
 import { PrismaClientRepository } from "../../repositories/PrismaClientRepository";
+import { PrismaPortfolioProjectRepository } from "../../repositories/PrismaPortfolioProjectRepository";
 import { PrismaAppErrorRepository } from "../../repositories/PrismaAppErrorRepository";
 import { PrismaApiKeyRepository } from "../../repositories/PrismaApiKeyRepository";
 import { PrismaWorkspaceRepository } from "../../repositories/PrismaWorkspaceRepository";
@@ -33,6 +34,12 @@ import { ListClients } from "../../../application/use-cases/ListClients";
 import { GetClient } from "../../../application/use-cases/GetClient";
 import { UpdateClient } from "../../../application/use-cases/UpdateClient";
 import { DeleteClient } from "../../../application/use-cases/DeleteClient";
+import { CreatePortfolioProject } from "../../../application/use-cases/CreatePortfolioProject";
+import { ListPortfolioProjects } from "../../../application/use-cases/ListPortfolioProjects";
+import { GetPortfolioProject } from "../../../application/use-cases/GetPortfolioProject";
+import { UpdatePortfolioProject } from "../../../application/use-cases/UpdatePortfolioProject";
+import { DeletePortfolioProject } from "../../../application/use-cases/DeletePortfolioProject";
+import { ReorderPortfolioProjects } from "../../../application/use-cases/ReorderPortfolioProjects";
 import { ListUsers } from "../../../application/use-cases/ListUsers";
 import { UpdateUser } from "../../../application/use-cases/UpdateUser";
 import { ChangePassword } from "../../../application/use-cases/ChangePassword";
@@ -90,6 +97,7 @@ import { StatsController } from "../../../interfaces/http/controllers/StatsContr
 import { ProjectController } from "../../../interfaces/http/controllers/ProjectController";
 import { TaskController } from "../../../interfaces/http/controllers/TaskController";
 import { ClientController } from "../../../interfaces/http/controllers/ClientController";
+import { PortfolioProjectController } from "../../../interfaces/http/controllers/PortfolioProjectController";
 import { ErrorController } from "../../../interfaces/http/controllers/ErrorController";
 import { ApiKeyController } from "../../../interfaces/http/controllers/ApiKeyController";
 import { NotificationController } from "../../../interfaces/http/controllers/NotificationController";
@@ -108,6 +116,7 @@ import { buildWorkspaceRoutes } from "./routes/workspaceRoutes";
 import { buildProjectRoutes } from "./routes/projectRoutes";
 import { buildTaskRoutes } from "./routes/taskRoutes";
 import { buildClientRoutes } from "./routes/clientRoutes";
+import { buildPortfolioProjectRoutes } from "./routes/portfolioProjectRoutes";
 import { buildErrorRoutes } from "./routes/errorRoutes";
 import { buildApiKeyRoutes } from "./routes/apiKeyRoutes";
 import { buildStatsRoutes } from "./routes/statsRoutes";
@@ -246,6 +255,7 @@ export const buildServer = (): Express => {
   const projectRepository = new PrismaProjectRepository();
   const taskRepository    = new PrismaTaskRepository();
   const clientRepository  = new PrismaClientRepository();
+  const portfolioProjectRepository = new PrismaPortfolioProjectRepository();
   const errorRepository   = new PrismaAppErrorRepository();
   const apiKeyRepository          = new PrismaApiKeyRepository();
   const notificationRepository    = new PrismaNotificationRepository();
@@ -445,6 +455,20 @@ export const buildServer = (): Express => {
   const updateBrand        = new UpdateBrand(brandRepository);
   const deleteBrand        = new DeleteBrand(brandRepository);
   const r2Storage          = new R2Storage();
+  const createPortfolioProject   = new CreatePortfolioProject(portfolioProjectRepository, r2Storage);
+  const listPortfolioProjects    = new ListPortfolioProjects(portfolioProjectRepository);
+  const getPortfolioProject      = new GetPortfolioProject(portfolioProjectRepository);
+  const updatePortfolioProject   = new UpdatePortfolioProject(portfolioProjectRepository, r2Storage);
+  const deletePortfolioProject   = new DeletePortfolioProject(portfolioProjectRepository, r2Storage);
+  const reorderPortfolioProjects = new ReorderPortfolioProjects(portfolioProjectRepository);
+  const portfolioProjectController = new PortfolioProjectController(
+    createPortfolioProject,
+    listPortfolioProjects,
+    getPortfolioProject,
+    updatePortfolioProject,
+    deletePortfolioProject,
+    reorderPortfolioProjects
+  );
   const createIgExample    = new CreateIgExamplePost(brandRepository, r2Storage);
   const deleteIgExample    = new DeleteIgExamplePost(r2Storage);
   const listIgExamples     = new ListIgExamplePosts();
@@ -484,6 +508,7 @@ export const buildServer = (): Express => {
   const requestLogController = new RequestLogController(listRequestLogs);
   app.use(buildBrandRoutes(brandController, authMiddleware));
   app.use(buildIgRoutes(igController, authMiddleware));
+  app.use(buildPortfolioProjectRoutes(portfolioProjectController, authMiddleware));
 
   startBatchPollingJob(checkBatchStatus, igBatchJobRepository, checkExampleSummaries, checkSynthesisBatches);
   app.use(buildContactRoutes(contactController, authMiddleware));

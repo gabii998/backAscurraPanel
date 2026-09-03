@@ -184,6 +184,27 @@ describe("GenerateIgPosts", () => {
     expect(batchRequests[0].userPrompt).toContain("formatRationale");
   });
 
+  it("excludes technical-error-tagged rejections from the RECHAZADOS few-shot context, keeping genuine reviewer rejections", async () => {
+    (prisma.igPost.findMany as jest.Mock).mockImplementation(({ where }) => {
+      if (where.status !== "rejected") return Promise.resolve([]);
+      const all = [
+        { caption: "Post con imagen rota", rejectReason: "[error de imagen] sin imagen en la respuesta" },
+        { caption: "Post con error de generación", rejectReason: "[error de generación] respuesta inválida" },
+        { caption: "Post rechazado por tono", rejectReason: "suena demasiado formal" },
+      ];
+      const excludedPrefixes = (where.NOT ?? []).map((c: { rejectReason: { startsWith: string } }) => c.rejectReason.startsWith);
+      return Promise.resolve(all.filter(p => !excludedPrefixes.some((prefix: string) => p.rejectReason.startsWith(prefix))));
+    });
+    const { brandRepo, postRepo, jobRepo } = makeRepos();
+
+    await new GenerateIgPosts(brandRepo, postRepo, jobRepo).execute({ brandId: "brand-1", quantity: 1 });
+
+    const prompt = (jobRepo.create as jest.Mock).mock.calls[0][0].prompt as string;
+    expect(prompt).toContain('Motivo: "suena demasiado formal" → "Post rechazado por tono"');
+    expect(prompt).not.toContain("[error de imagen]");
+    expect(prompt).not.toContain("[error de generación]");
+  });
+
   it("creates one draft post row per requested post, all attached to the batch job", async () => {
     const { brandRepo, postRepo, jobRepo } = makeRepos();
 

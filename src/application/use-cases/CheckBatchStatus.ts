@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobRepository";
 import type { IgPostRepository } from "../../domain/repositories/IgPostRepository";
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
+import { TECHNICAL_REJECTION_PREFIX_GENERATION, TECHNICAL_REJECTION_PREFIX_IMAGE } from "../../domain/entities/IgPost";
 import type { R2Storage } from "../../infrastructure/services/R2Storage";
 import { calculateBatchCost, calculateImageBatchCost } from "../../infrastructure/services/CostCalculator";
 import { prisma } from "../../infrastructure/db/prisma";
@@ -74,7 +75,7 @@ export class CheckBatchStatus {
       }
 
       if (result.error) {
-        await this.postRepo.update(post.id, { status: "rejected", rejectReason: `[error de generación] ${result.error}` });
+        await this.postRepo.update(post.id, { status: "rejected", rejectReason: `${TECHNICAL_REJECTION_PREFIX_GENERATION} ${result.error}` });
         continue;
       }
 
@@ -82,7 +83,7 @@ export class CheckBatchStatus {
       try {
         parsed = JSON.parse(result.content) as TextResult;
       } catch {
-        await this.postRepo.update(post.id, { status: "rejected", rejectReason: "[error de generación] respuesta inválida" });
+        await this.postRepo.update(post.id, { status: "rejected", rejectReason: `${TECHNICAL_REJECTION_PREFIX_GENERATION} respuesta inválida` });
         continue;
       }
 
@@ -166,7 +167,7 @@ export class CheckBatchStatus {
 
       const result = resultsByCustomId.get(`post-${i}`);
       if (!result || result.error || !result.b64Json) {
-        await this.postRepo.update(post.id, { status: "rejected", rejectReason: `[error de imagen] ${result?.error ?? "sin imagen en la respuesta"}` });
+        await this.postRepo.update(post.id, { status: "rejected", rejectReason: `${TECHNICAL_REJECTION_PREFIX_IMAGE} ${result?.error ?? "sin imagen en la respuesta"}` });
         continue;
       }
 

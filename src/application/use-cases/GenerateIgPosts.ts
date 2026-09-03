@@ -2,6 +2,7 @@ import type { BrandRepository } from "../../domain/repositories/BrandRepository"
 import type { IgPostRepository } from "../../domain/repositories/IgPostRepository";
 import type { IgBatchJobRepository } from "../../domain/repositories/IgBatchJobRepository";
 import type { IgBatchJob } from "../../domain/entities/IgBatchJob";
+import { TECHNICAL_REJECTION_PREFIXES } from "../../domain/entities/IgPost";
 import { prisma } from "../../infrastructure/db/prisma";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
 import { normalizeAssetUrl } from "../../infrastructure/utils/normalizeAssetUrl";
@@ -37,7 +38,10 @@ export class GenerateIgPosts {
         select: { caption: true, hashtags: true, igReach: true, igEngagement: true, igSaved: true, igSyncedAt: true },
       }),
       prisma.igPost.findMany({
-        where: { brandId, status: "rejected", rejectReason: { not: "" } },
+        where: {
+          brandId, status: "rejected", rejectReason: { not: "" },
+          NOT: TECHNICAL_REJECTION_PREFIXES.map(prefix => ({ rejectReason: { startsWith: prefix } })),
+        },
         orderBy: { rejectedAt: "desc" },
         take: 3,
         select: { caption: true, rejectReason: true },

@@ -1,5 +1,6 @@
 import { prisma } from "../../infrastructure/db/prisma";
 import { resolveOpenAIService } from "../../infrastructure/services/resolveOpenAIService";
+import { TECHNICAL_REJECTION_PREFIXES } from "../../domain/entities/IgPost";
 
 export class SynthesizeBrandLearning {
   async execute(brandId: string): Promise<{ batchId: string }> {
@@ -14,7 +15,10 @@ export class SynthesizeBrandLearning {
         select: { caption: true, igReach: true, igEngagement: true, igSaved: true, igSyncedAt: true },
       }),
       prisma.igPost.findMany({
-        where: { brandId, status: "rejected", rejectReason: { not: "" } },
+        where: {
+          brandId, status: "rejected", rejectReason: { not: "" },
+          NOT: TECHNICAL_REJECTION_PREFIXES.map(prefix => ({ rejectReason: { startsWith: prefix } })),
+        },
         orderBy: { rejectedAt: "desc" },
         take: 15,
         select: { caption: true, rejectReason: true },

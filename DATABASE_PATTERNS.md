@@ -14,6 +14,8 @@ Los ids son `String @id @default(uuid())` en todos los modelos. Única excepció
 
 `deletedAt DateTime?` existe hoy en exactamente 5 modelos: `User`, `Project`, `Task`, `Client`, `AppError`. **No es universal** — el resto de los modelos hace hard delete. Antes de asumir que un modelo soporta baja lógica, verificá el schema; no lo des por sentado por analogía con otro dominio.
 
+Un modelo dueño de un archivo externo (R2) — como `IgExamplePost` o `PortfolioProject` — hace hard delete deliberadamente: no hay valor en retener el registro sin su archivo, y mantener soft delete obligaría a decidir por separado cuándo borrar el objeto en R2. Al borrar, el caso de uso borra primero el objeto en R2 y recién después la fila.
+
 ## Multi-tenancy
 
 No aplica. No hay campo `workspaceId`/`tenantId` en ningún modelo — `Workspace` es una fila global única de configuración, no un mecanismo de scoping. No hay PostGIS ni columnas geoespaciales en este schema.

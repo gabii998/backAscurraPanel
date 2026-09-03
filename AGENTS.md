@@ -11,6 +11,7 @@ Este archivo es el punto de entrada para agentes (Codex, Claude) que trabajan en
 | Login, usuarios, sesiones o configuración del workspace | [docs/identidad-usuarios.md](docs/identidad-usuarios.md) |
 | Proyectos o tareas (Kanban) | [docs/proyectos-tareas.md](docs/proyectos-tareas.md) |
 | Clientes (CRM) | [docs/clientes.md](docs/clientes.md) |
+| Portfolio (proyectos del landing público) | [docs/portfolio.md](docs/portfolio.md) |
 | Prospección de ventas o el presence-tracker "Companion" | [docs/prospects-crm.md](docs/prospects-crm.md) |
 | Ingesta o gestión de errores de otros proyectos | [docs/monitoreo-errores.md](docs/monitoreo-errores.md) |
 | Emisión o revocación de API keys | [docs/api-keys.md](docs/api-keys.md) |
