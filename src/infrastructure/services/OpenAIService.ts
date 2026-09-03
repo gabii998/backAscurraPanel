@@ -66,9 +66,12 @@ export class OpenAIService implements OpenAIBatchService {
   // for every request in the batch, so the endpoint choice (edits vs. generations) is made once
   // for the whole call rather than per line (a single OpenAI batch can only target one endpoint).
   //
-  // NOTE: the exact shape of the "image" field for /v1/images/edits batch lines below (an array
-  // of { image_url }) has not been confirmed against a live call or the current OpenAI API
-  // reference — verify this against real traffic before relying on it in production.
+  // The field is "images" (plural, array) on /v1/images/edits — OpenAI's JSON-mode batch API
+  // rejects the singular "image" key used by the multipart form-data version of this endpoint
+  // (observed in production: "Unknown parameter: 'image'. For application/json on
+  // /v1/images/edits, use 'images' (array)."). The per-item shape ({ image_url }) still hasn't
+  // been independently confirmed beyond that — if OpenAI rejects the item shape too, the error
+  // will name the offending param the same way this one did.
   async submitImageBatch(requests: ImageBatchRequest[], referenceImageUrls: string[] = []): Promise<string> {
     const hasReferences = referenceImageUrls.length > 0;
     const endpoint: BatchEndpoint = hasReferences ? "/v1/images/edits" : "/v1/images/generations";
@@ -81,7 +84,7 @@ export class OpenAIService implements OpenAIBatchService {
           model: IMAGE_MODEL,
           prompt: r.prompt,
           size: "1024x1024",
-          ...(hasReferences ? { image: referenceImageUrls.map(url => ({ image_url: normalizeAssetUrl(url) })) } : {}),
+          ...(hasReferences ? { images: referenceImageUrls.map(url => ({ image_url: normalizeAssetUrl(url) })) } : {}),
         },
       }),
     );

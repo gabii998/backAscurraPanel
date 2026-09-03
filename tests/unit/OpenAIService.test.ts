@@ -453,17 +453,20 @@ describe("OpenAIService", () => {
   });
 
   describe("submitImageBatch", () => {
-    it("routes to /v1/images/generations and omits the image field when there are no reference images", async () => {
+    it("routes to /v1/images/generations and omits the images field when there are no reference images", async () => {
       await service.submitImageBatch([{ customId: "post-0", prompt: "Foto de producto" }]);
 
       const [line] = await submittedLines();
       expect(line).toMatchObject({ custom_id: "post-0", method: "POST", url: "/v1/images/generations" });
       expect(line.body).toMatchObject({ model: "gpt-image-1", prompt: "Foto de producto" });
-      expect(line.body.image).toBeUndefined();
+      expect(line.body.images).toBeUndefined();
       expect(batchesCreate).toHaveBeenCalledWith(expect.objectContaining({ endpoint: "/v1/images/generations" }));
     });
 
-    it("routes to /v1/images/edits and attaches every reference image when references are given", async () => {
+    // OpenAI rejects the singular "image" key (used by the multipart form-data version of this
+    // endpoint) on the JSON/batch version with "Unknown parameter: 'image'. For application/json
+    // on /v1/images/edits, use 'images' (array)." — reproduced verbatim in production.
+    it("routes to /v1/images/edits and attaches every reference image under the plural 'images' key", async () => {
       await service.submitImageBatch(
         [{ customId: "post-0", prompt: "Foto de producto con el logo" }],
         ["https://cdn/logo.png", "https://cdn/producto.png"],
@@ -471,7 +474,8 @@ describe("OpenAIService", () => {
 
       const [line] = await submittedLines();
       expect(line.url).toBe("/v1/images/edits");
-      expect(line.body.image).toEqual([
+      expect(line.body.image).toBeUndefined();
+      expect(line.body.images).toEqual([
         { image_url: "https://cdn/logo.png" },
         { image_url: "https://cdn/producto.png" },
       ]);
@@ -485,7 +489,7 @@ describe("OpenAIService", () => {
       );
 
       const [line] = await submittedLines();
-      expect(line.body.image[0].image_url).toBe("https://instabucket.ascurra-soluciones.com/instagram/brand-1/logo.png");
+      expect(line.body.images[0].image_url).toBe("https://instabucket.ascurra-soluciones.com/instagram/brand-1/logo.png");
     });
 
     it("submits one line per request within the same image batch", async () => {
