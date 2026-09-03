@@ -43,6 +43,12 @@ Tres niveles de confianza conviven, sin mezclarse dentro de una misma ruta:
 
 Este backend **no es multi-tenant**. `Workspace` es una única fila de configuración global (nombre, timezone, idioma, token de invitación) — no existe un campo `workspaceId`/`tenantId` en ningún modelo del schema. No asumas scoping por tenant al leer o escribir código nuevo.
 
+## Verificar archivos en R2 (no confiar en la URL pública)
+
+`R2Storage` sirve los objetos vía un dominio público (`CLOUDFLARE_R2_PUBLIC_BASE_URL`) que está detrás de Cloudflare con cache (`Cache-Control: max-age=14400`, 4 horas). Al verificar manualmente que un `delete`/reemplazo funcionó, un `curl` a esa URL pública puede devolver `200` durante horas después del borrado real — es el edge de Cloudflare sirviendo la copia cacheada (`cf-cache-status: HIT`, header `Age` alto), no el estado real del bucket. Pasó al verificar el reemplazo de imagen de `PortfolioProject`: la URL vieja seguía respondiendo 200 mucho después de que `storage.delete()` ya la había borrado.
+
+Para verificar el estado real de un objeto, pegarle al bucket directo con el SDK de S3 (mismas credenciales que usa `R2Storage`, `HeadObjectCommand` contra `CLOUDFLARE_R2_ACCOUNT_ID`/`CLOUDFLARE_R2_BUCKET_NAME`), nunca al dominio público cacheado.
+
 ## Convenciones de nombres
 
 - Archivos de caso de uso: `PascalCase.ts`, un export por archivo.
