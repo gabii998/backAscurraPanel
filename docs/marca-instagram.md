@@ -1,0 +1,5 @@
+# Marca e Instagram (contenido con IA)
+
+**Leer cuando:** perfiles de marca (estilo/contexto para contenido generado con IA), síntesis de aprendizaje de marca, o el pipeline de generación/aprobación/publicación de posts de Instagram.
+
+_Todavía no documentado en detalle — leer `BrandController.ts`, `IgController.ts` y los casos de uso `CreateBrand`/`UpdateBrand`/`DeleteBrand`/`ListBrands`/`GetBrand`, `SynthesizeBrandLearning`, `CheckSynthesisBatch`/`CheckSynthesisBatches`, `ConnectIgAccount`, `GenerateIgPosts`, `ApproveIgPost`, `RejectIgPost`, `PublishIgPost`, `GetIgPost`/`ListIgPosts`, `GetIgBatchJob`/`ListIgBatchJobs`, `CheckBatchStatus`, `EstimateIgGenerationCost`, `ListIgCostLogs`, `SyncIgPostMetrics`, `CreateIgExamplePost`/`DeleteIgExamplePost`/`ListIgExamplePosts`, `CheckIgExampleSummaryBatches`, `RetryIgExampleSummary` como fuente de verdad hasta completar este documento. Es el dominio más grande del backend — si al escribirlo supera ~120 líneas, considerar separarlo en `marca.md` + `instagram.md`._
