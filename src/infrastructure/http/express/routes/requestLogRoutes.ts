@@ -10,5 +10,7 @@ export const buildRequestLogRoutes = (
 
   router.get("/request-logs", authMiddleware, wrapRequestHandler(controller.handleList.bind(controller)));
 
+  router.delete("/request-logs", authMiddleware, wrapRequestHandler(controller.handleClear.bind(controller)));
+
   return router;
 };

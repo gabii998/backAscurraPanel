@@ -2,6 +2,8 @@ import type { TaskRepository } from "../../domain/repositories/TaskRepository";
 import type { Task, Priority, Column } from "../../domain/entities/Task";
 import { prisma } from "../db/prisma";
 
+import { validateProjectColumns } from "../../domain/entities/ProjectColumn";
+
 export class PrismaTaskRepository implements TaskRepository {
   async findById(id: string): Promise<Task | null> {
     const row = await prisma.task.findFirst({ where: { id, deletedAt: null } });
@@ -17,7 +19,12 @@ export class PrismaTaskRepository implements TaskRepository {
   }
 
   async create(task: Task): Promise<Task> {
-    await prisma.task.create({
+    await prisma.$transaction(async tx => {
+    const project = await tx.project.findFirst({ where: { id: task.projectId, deletedAt: null } });
+    if (!project) throw new Error("PROJECT_NOT_FOUND");
+    const columns = validateProjectColumns(project.columns);
+    if (!columns.some(c => c.id === task.column)) throw new Error("INVALID_TASK_COLUMN");
+    await tx.task.create({
       data: {
         id: task.id,
         projectId: task.projectId,
@@ -34,6 +41,7 @@ export class PrismaTaskRepository implements TaskRepository {
         deletedAt: null,
       },
     });
+    }, { isolationLevel: "Serializable" });
     return task;
   }
 
@@ -43,7 +51,12 @@ export class PrismaTaskRepository implements TaskRepository {
   ): Promise<Task | null> {
     const existing = await prisma.task.findFirst({ where: { id, deletedAt: null } });
     if (!existing) return null;
-    const updated = await prisma.task.update({ where: { id }, data });
+    const updated = await prisma.$transaction(async tx => {
+      const project = await tx.project.findFirst({ where: { id: existing.projectId, deletedAt: null } });
+      if (!project) throw new Error("PROJECT_NOT_FOUND");
+      if (data.column !== undefined && !validateProjectColumns(project.columns).some(c => c.id === data.column)) throw new Error("INVALID_TASK_COLUMN");
+      return tx.task.update({ where: { id }, data });
+    }, { isolationLevel: "Serializable" });
     return this.toEntity(updated);
   }
 

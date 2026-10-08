@@ -69,6 +69,7 @@ model Project {
   stack        String
   status       ProjectStatus @default(active)
   progress     Int           @default(0)
+  columns      Json          @default("[{\"id\":\"backlog\",\"label\":\"Backlog\",\"color\":\"#94a3b8\"},{\"id\":\"progress\",\"label\":\"En progreso\",\"color\":\"#3b82f6\"},{\"id\":\"review\",\"label\":\"En revisi\u00f3n\",\"color\":\"#f59e0b\"},{\"id\":\"done\",\"label\":\"Completado\",\"color\":\"#22c55e\"}]")
   updatedAt    DateTime      @updatedAt
   createdAt    DateTime      @default(now())
   deletedAt    DateTime?
@@ -98,7 +99,7 @@ model Task {
   title         String
   description   String    @default("")
   priority      Priority  @default(medium)
-  column        Column    @default(backlog)
+  column        String    @default("backlog")
   labels        String[]
   dueDate       String?
   subtasksDone  Int       @default(0)
@@ -119,12 +120,6 @@ enum Priority {
   critical
 }
 
-enum Column {
-  backlog
-  progress
-  review
-  done
-}
 
 model Client {
   id            String        @id @default(uuid())
@@ -236,6 +231,25 @@ model ApiKey {
   revokedAt    DateTime?
   errorConfigs ErrorConfig[]
   arcaConfigs  ArcaConfigApiKey[]
+  pendingSynchronizations PendingSynchronization[]
+}
+
+// Each row is an acknowledgement record for an item which was queued locally by
+// a client. clientItemId is supplied by that client and makes retries safe.
+model PendingSynchronization {
+  id           String   @id @default(uuid())
+  clientItemId String
+  apiKeyId     String
+  type         String
+  message      String
+  severity     String
+  stackTrace   String   @default("")
+  meta         Json?
+  receivedAt   DateTime @default(now())
+  apiKey       ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@unique([apiKeyId, clientItemId])
+  @@index([receivedAt])
 }
 
 model ErrorConfig {
@@ -258,6 +272,7 @@ model Prospect {
   hours          String         @default("")
   socialMedia    String         @default("")
   instagramUrl   String         @default("")
+  mapsUrl        String         @default("")
   hasWebsite     Boolean        @default(false)
   hasSocialMedia Boolean        @default(false)
   rating         Float          @default(0)

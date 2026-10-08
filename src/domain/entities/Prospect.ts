@@ -11,6 +11,7 @@ export interface Prospect {
   hours: string;
   socialMedia: string;
   instagramUrl: string;
+  mapsUrl: string;
   hasWebsite: boolean;
   hasSocialMedia: boolean;
   rating: number;

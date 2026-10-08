@@ -7,5 +7,6 @@ export interface RequestLogFilters {
 export interface RequestLogRepository {
   create(log: Omit<RequestLog, "id" | "createdAt">): Promise<void>;
   list(skip?: number, limit?: number, filters?: RequestLogFilters): Promise<RequestLog[]>;
+  clear(): Promise<number>;
   count(filters?: RequestLogFilters): Promise<number>;
 }

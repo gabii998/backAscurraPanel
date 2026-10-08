@@ -4,12 +4,15 @@ import type { ListErrorConfigs } from "../../../application/use-cases/ListErrorC
 import type { GetErrorConfig } from "../../../application/use-cases/GetErrorConfig";
 import type { DeleteErrorConfig } from "../../../application/use-cases/DeleteErrorConfig";
 
+import type { ClearErrorConfigErrors } from "../../../application/use-cases/ClearErrorConfigErrors";
+
 export class ErrorConfigController {
   constructor(
     private readonly createErrorConfig: CreateErrorConfig,
     private readonly listErrorConfigs: ListErrorConfigs,
     private readonly getErrorConfig: GetErrorConfig,
     private readonly deleteErrorConfig: DeleteErrorConfig,
+    private readonly clearErrorConfigErrors: ClearErrorConfigErrors,
   ) {}
 
   async handleCreate(req: Request, res: Response): Promise<void> {
@@ -43,6 +46,19 @@ export class ErrorConfigController {
       return;
     }
     res.json(config);
+  }
+
+  async handleClearErrors(req: Request, res: Response): Promise<void> {
+    try {
+      const clearedCount = await this.clearErrorConfigErrors.execute(req.params.id);
+      res.json({ clearedCount });
+    } catch (error) {
+      if (error instanceof Error && error.message === "ERROR_CONFIG_NOT_FOUND") {
+        res.status(404).json({ message: "ERROR_CONFIG_NOT_FOUND" });
+        return;
+      }
+      throw error;
+    }
   }
 
   async handleDelete(req: Request, res: Response): Promise<void> {

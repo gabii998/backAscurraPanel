@@ -16,6 +16,7 @@ export interface AppErrorRepository {
   addOccurrence(errorId: string, data: OccurrenceData): Promise<void>;
   updateCounts(id: string, data: { count: number; usersAffected: number; lastSeen: Date }): Promise<void>;
   updateStatus(id: string, status: ErrorStatus): Promise<AppError | null>;
+  softDeleteByConfig(errorConfigId: string): Promise<number>;
   softDelete(id: string): Promise<boolean>;
   getSparkline(errorId: string): Promise<number[]>;
   isUserKnown(errorId: string, userId: string): Promise<boolean>;

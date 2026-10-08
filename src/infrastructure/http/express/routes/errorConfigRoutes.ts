@@ -13,5 +13,7 @@ export const buildErrorConfigRoutes = (
   router.get("/error-configs/:id",    authMiddleware, wrapRequestHandler(controller.handleGet.bind(controller)));
   router.delete("/error-configs/:id", authMiddleware, wrapRequestHandler(controller.handleDelete.bind(controller)));
 
+  router.delete("/error-configs/:id/errors", authMiddleware, wrapRequestHandler(controller.handleClearErrors.bind(controller)));
+
   return router;
 };

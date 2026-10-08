@@ -27,11 +27,19 @@ export class TaskController {
       res.status(400).json({ message: "MISSING_FIELDS" });
       return;
     }
+    try {
     const task = await this.createTask.execute({ ...req.body, projectId: req.params.id });
     if (this.notificationDispatcher && task.assigneeId) {
       void this.notificationDispatcher.taskAssigned(task.id, task.title, task.assigneeId);
     }
     res.status(201).json(task);
+    } catch (error) {
+      if (error instanceof Error && ["INVALID_TASK_COLUMN", "PROJECT_NOT_FOUND"].includes(error.message)) {
+        res.status(error.message === "PROJECT_NOT_FOUND" ? 404 : 400).json({ message: error.message });
+        return;
+      }
+      throw error;
+    }
   }
 
   async handleUpdate(req: Request, res: Response): Promise<void> {
@@ -49,6 +57,10 @@ export class TaskController {
     } catch (error) {
       if (error instanceof Error && error.message === "TASK_NOT_FOUND") {
         res.status(404).json({ message: "TASK_NOT_FOUND" });
+        return;
+      }
+      if (error instanceof Error && ["INVALID_TASK_COLUMN", "PROJECT_NOT_FOUND"].includes(error.message)) {
+        res.status(error.message === "PROJECT_NOT_FOUND" ? 404 : 400).json({ message: error.message });
         return;
       }
       throw error;

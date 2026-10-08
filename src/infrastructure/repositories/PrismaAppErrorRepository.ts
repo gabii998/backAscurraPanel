@@ -91,6 +91,14 @@ export class PrismaAppErrorRepository implements AppErrorRepository {
     return this.findById(id);
   }
 
+  async softDeleteByConfig(errorConfigId: string): Promise<number> {
+    const result = await prisma.appError.updateMany({
+      where: { errorConfigId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    return result.count;
+  }
+
   async softDelete(id: string): Promise<boolean> {
     const existing = await prisma.appError.findFirst({ where: { id, deletedAt: null } });
     if (!existing) return false;

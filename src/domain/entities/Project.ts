@@ -1,3 +1,5 @@
+import type { ProjectColumn } from "./ProjectColumn";
+
 export type ProjectStatus = "active" | "completed" | "paused";
 
 export interface Project {
@@ -10,4 +12,5 @@ export interface Project {
   createdAt: Date;
   deletedAt: Date | null;
   memberIds: string[];
+  columns?: ProjectColumn[];
 }

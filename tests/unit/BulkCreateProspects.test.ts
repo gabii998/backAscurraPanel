@@ -21,6 +21,7 @@ const result = (): Omit<Prospect, "id" | "createdAt" | "stage" | "notes"> => ({
   hours: "",
   socialMedia: "https://www.facebook.com/cafecentral, https://www.instagram.com/cafecentral/",
   instagramUrl: "",
+  mapsUrl: "",
   hasWebsite: false,
   hasSocialMedia: true,
   rating: 4.5,

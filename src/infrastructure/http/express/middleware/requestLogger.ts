@@ -3,7 +3,7 @@ import type { RequestLogRepository } from "../../../../domain/repositories/Reque
 
 export const buildRequestLoggerMiddleware = (logRepo: RequestLogRepository): RequestHandler =>
   (req, res, next) => {
-    if (req.path.startsWith("/health") || req.path.startsWith("/api-docs")) {
+    if (req.path === "/request-logs" || req.path.startsWith("/health") || req.path.startsWith("/api-docs")) {
       return next();
     }
 

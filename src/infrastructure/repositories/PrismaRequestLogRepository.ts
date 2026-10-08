@@ -16,6 +16,11 @@ export class PrismaRequestLogRepository implements RequestLogRepository {
     });
   }
 
+  async clear(): Promise<number> {
+    const result = await prisma.requestLog.deleteMany({});
+    return result.count;
+  }
+
   async count(filters?: RequestLogFilters): Promise<number> {
     return prisma.requestLog.count({
       where: filters?.pathPrefix ? { path: { startsWith: filters.pathPrefix } } : undefined,

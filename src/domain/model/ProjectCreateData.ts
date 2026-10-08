@@ -7,7 +7,10 @@ export interface ProjectCreateData {
   memberIds?: string[];
 }
 
+import type { ProjectColumn } from "../entities/ProjectColumn";
+
 export interface ProjectUpdateData {
+  columns?: ProjectColumn[];
   name?: string;
   stack?: string;
   status?: ProjectStatus;

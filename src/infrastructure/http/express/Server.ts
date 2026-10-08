@@ -62,6 +62,7 @@ import { DeleteProspect } from "../../../application/use-cases/DeleteProspect";
 import { CreateErrorConfig } from "../../../application/use-cases/CreateErrorConfig";
 import { ListErrorConfigs } from "../../../application/use-cases/ListErrorConfigs";
 import { GetErrorConfig } from "../../../application/use-cases/GetErrorConfig";
+import { ClearErrorConfigErrors } from "../../../application/use-cases/ClearErrorConfigErrors";
 import { DeleteErrorConfig } from "../../../application/use-cases/DeleteErrorConfig";
 import { FindErrorConfigsByApiKey } from "../../../application/use-cases/FindErrorConfigsByApiKey";
 import { SendMail } from "../../../application/use-cases/SendMail";
@@ -107,6 +108,7 @@ import { buildAuthMiddleware } from "./middleware/authMiddleware";
 import { notFoundHandler, buildErrorHandler } from "./middleware/errorHandler";
 import { buildRequestLoggerMiddleware } from "./middleware/requestLogger";
 import { PrismaRequestLogRepository } from "../../repositories/PrismaRequestLogRepository";
+import { ClearRequestLogs } from "../../../application/use-cases/ClearRequestLogs";
 import { ListRequestLogs } from "../../../application/use-cases/ListRequestLogs";
 import { RequestLogController } from "../../../interfaces/http/controllers/RequestLogController";
 import { buildRequestLogRoutes } from "./routes/requestLogRoutes";
@@ -321,7 +323,7 @@ export const buildServer = (): Express => {
   const projectController = new ProjectController(createProject, listProjects, getProject, updateProject, deleteProject, notificationDispatcher);
 
   // Task use cases + controller
-  const createTask         = new CreateTask(taskRepository);
+  const createTask         = new CreateTask(taskRepository, projectRepository);
   const listTasksByProject = new ListTasksByProject(taskRepository);
   const updateTask         = new UpdateTask(taskRepository);
   const deleteTask         = new DeleteTask(taskRepository);
@@ -357,7 +359,7 @@ export const buildServer = (): Express => {
   const listErrorConfigs  = new ListErrorConfigs(errorConfigRepository);
   const getErrorConfig    = new GetErrorConfig(errorConfigRepository);
   const deleteErrorConfig = new DeleteErrorConfig(errorConfigRepository);
-  const errorConfigController = new ErrorConfigController(createErrorConfig, listErrorConfigs, getErrorConfig, deleteErrorConfig);
+  const errorConfigController = new ErrorConfigController(createErrorConfig, listErrorConfigs, getErrorConfig, deleteErrorConfig, new ClearErrorConfigErrors(errorConfigRepository, errorRepository));
 
   // API key use cases + controller
   const createApiKey = new CreateApiKey(apiKeyRepository);
@@ -505,7 +507,7 @@ export const buildServer = (): Express => {
 
   // Request logs
   const listRequestLogs      = new ListRequestLogs(requestLogRepository);
-  const requestLogController = new RequestLogController(listRequestLogs);
+  const requestLogController = new RequestLogController(listRequestLogs, new ClearRequestLogs(requestLogRepository));
   app.use(buildBrandRoutes(brandController, authMiddleware));
   app.use(buildIgRoutes(igController, authMiddleware));
   app.use(buildPortfolioProjectRoutes(portfolioProjectController, authMiddleware));

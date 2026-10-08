@@ -3,6 +3,8 @@ import type { ProjectRepository } from "../../domain/repositories/ProjectReposit
 import type { ProjectCreateData } from "../../domain/model/ProjectCreateData";
 import type { Project } from "../../domain/entities/Project";
 
+import { DEFAULT_PROJECT_COLUMNS } from "../../domain/entities/ProjectColumn";
+
 export class CreateProject {
   constructor(private readonly repository: ProjectRepository) {}
 
@@ -14,6 +16,7 @@ export class CreateProject {
       stack: data.stack,
       status: data.status ?? "active",
       progress: 0,
+      columns: DEFAULT_PROJECT_COLUMNS.map(c => ({ ...c })),
       updatedAt: now,
       createdAt: now,
       deletedAt: null,

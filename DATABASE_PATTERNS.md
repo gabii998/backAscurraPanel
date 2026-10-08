@@ -22,7 +22,7 @@ No aplica. No hay campo `workspaceId`/`tenantId` en ningún modelo — `Workspac
 
 ## Enums
 
-Definidos junto al modelo que los usa, en `snake_case`/valores en minúscula: `ProjectStatus`, `Priority`, `Column` (estado de columna Kanban), `ClientStatus`, `ErrorSeverity`, `ErrorStatus`, `ProspectStage`, `WhatsAppMessageDirection`, `ContactRequestStatus`, `IgPostStatus`. Si agregás un enum nuevo, seguí la misma convención de nombres en minúscula para los valores.
+Definidos junto al modelo que los usa, en `snake_case`/valores en minúscula: `ProjectStatus`, `Priority`, `ClientStatus`, `ErrorSeverity`, `ErrorStatus`, `ProspectStage`, `WhatsAppMessageDirection`, `ContactRequestStatus`, `IgPostStatus`. Si agregás un enum nuevo, seguí la misma convención de nombres en minúscula para los valores.
 
 ## Migraciones
 
@@ -36,4 +36,4 @@ La gran mayoría de `src/infrastructure/repositories/*.ts` usa el Prisma Client 
 
 ## Transacciones
 
-No hay un patrón de lock/transacción documentado confirmado en este repo (a diferencia de otros proyectos hermanos que sí tienen un lock de reserva específico). Si tu cambio introduce una transacción o un lock relevante para correctitud (por ejemplo, para evitar condiciones de carrera en un flujo concurrente), documentalo acá cuando lo agregues.
+El cambio de columnas de un proyecto y la creación o edición de tareas se ejecutan con transacciones serializables. El chequeo de columnas ocupadas y la validación de pertenencia ocurren dentro de esas transacciones, para impedir que una eliminación de columna concurrente deje tareas sin columna válida.

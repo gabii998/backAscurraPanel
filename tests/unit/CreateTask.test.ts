@@ -1,5 +1,6 @@
 import { CreateTask } from "../../src/application/use-cases/CreateTask";
 import type { TaskRepository } from "../../src/domain/repositories/TaskRepository";
+import type { ProjectRepository } from "../../src/domain/repositories/ProjectRepository";
 import type { Task } from "../../src/domain/entities/Task";
 
 const makeRepo = (): TaskRepository => ({
@@ -13,7 +14,7 @@ const makeRepo = (): TaskRepository => ({
 describe("CreateTask", () => {
   it("creates a task with defaults", async () => {
     const repo = makeRepo();
-    const uc = new CreateTask(repo);
+    const uc = new CreateTask(repo, { findById: jest.fn().mockResolvedValue({ id: "p1" }) } as unknown as ProjectRepository);
 
     const task = await uc.execute({ projectId: "p1", title: "Setup CI" });
 
@@ -27,7 +28,7 @@ describe("CreateTask", () => {
 
   it("respects overridden fields", async () => {
     const repo = makeRepo();
-    const uc = new CreateTask(repo);
+    const uc = new CreateTask(repo, { findById: jest.fn().mockResolvedValue({ id: "p1" }) } as unknown as ProjectRepository);
 
     const task = await uc.execute({
       projectId: "p1",

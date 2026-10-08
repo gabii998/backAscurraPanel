@@ -32,6 +32,7 @@ const makeRepo = (overrides: Partial<AppErrorRepository> = {}): AppErrorReposito
   updateCounts:      jest.fn().mockResolvedValue(undefined),
   updateStatus:      jest.fn(),
   softDelete:        jest.fn(),
+  softDeleteByConfig: jest.fn(),
   getSparkline:      jest.fn().mockResolvedValue([0, 0, 0, 0, 0, 0, 1]),
   isUserKnown:       jest.fn().mockResolvedValue(false),
   ...overrides,

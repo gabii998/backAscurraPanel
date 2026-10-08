@@ -70,6 +70,10 @@ export class ProjectController {
         res.status(404).json({ message: "PROJECT_NOT_FOUND" });
         return;
       }
+      if (error instanceof Error && ["INVALID_PROJECT_COLUMNS", "COMPLETED_COLUMN_REQUIRED", "COLUMN_HAS_TASKS"].includes(error.message)) {
+        res.status(error.message === "COLUMN_HAS_TASKS" ? 409 : 400).json({ message: error.message });
+        return;
+      }
       throw error;
     }
   }
